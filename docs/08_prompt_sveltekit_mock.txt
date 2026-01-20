@@ -1,0 +1,61 @@
+SvelteKit + TypeScript + Tailwindで、ハッカソン作品の継続開発を支援するコミュニティサービスのモックを作ってください。
+API/DBへの実接続は不要。in-memory配列 or JSONでモックCRUDを実装してください。日本語UI。
+
+目的:
+- 作品共有、コメント/レビュー/リアクション、仲間作り（DM/プロジェクト会話）を支援し、継続開発を後押しする
+- “ワイワイ感/ひと気”を出すため、コミュニティタイムライン（進捗/相談/見せびらかし）を中心にする
+- 投げ銭は外部で行うが、支援金額はシステム内で「支援記録」として把握し、受領側が「受け取りました」で確定する（JPY固定、期限なし）
+
+重要仕様:
+- ロールは user と admin のみ（一般/開発者で分けない）
+- 初回オンボーディングで「何をしたいか（投稿/応援/仲間/イベント）」を複数選択し、ホーム/ダッシュボードの並びを変える（後で変更可能）
+- プロジェクト一覧はソート切替可能で、デフォルトは更新順
+- タイムライン投稿はMVPでは全公開
+
+タイムライン:
+- 投稿タイプ（固定）: progress(進捗) / question(相談) / showcase(見せびらかし)
+- 相談投稿はテンプレ固定: 状況 / 困りごと / 試したこと / 環境
+- 相談投稿はベスト回答(accepted)を選択でき、solvedにできる
+- リアクションは5種類（例: clap/like/idea/fire/help）
+
+支援記録:
+- 支援者が外部で支援した後、プロジェクト詳細の「支援記録を作成」から amount(JPY) と message? を登録
+- 登録直後は status=awaiting_owner
+- 受領側（プロジェクトオーナー）が「受け取りました」で status=confirmed にして確定
+- 確定(confirmed)のみ合計額に加算
+- 確定前のみ：支援者キャンセル、受領側却下（理由入力なし）
+
+メッセージ:
+- 個人DM（1対1）と project会話（グループ）
+- テキストのみ
+- 未読管理あり（last_read_at等の簡易でOK）
+
+通知:
+- アプリ内＋メール（即時）。通知設定（種類×チャネル）を変更可能
+- 将来ダイジェスト（日次/週次）を選べるよう、設定に項目だけ用意（MVPは未実装でも可）
+
+画面:
+- /onboarding（フォーカス選択）
+- /（ホーム：タイムライン/最近の動き/最近更新作品など。フォーカスで並び替え）
+- /timeline（全体/フォロー/イベント/プロジェクトのフィルタ）
+- /events, /events/[id]（イベントルーム=イベントタイムライン）
+- /projects（検索/タグ/ソート）
+- /projects/[id]（概要/更新/レビュー/コメント/仲間募集/応援/会話）
+- /dashboard（自分の作品、承認待ち支援、未読DM、自分の未解決相談）
+- /messages, /messages/[id]
+- /settings（フォーカス/通知設定）
+- /admin（イベント/告知）
+
+モックAPI（例）:
+- /api/timeline (GET/POST), /api/timeline/:id (PATCH), /api/timeline/:id/solve (POST)
+- /api/reactions (POST/DELETE)
+- /api/messages/conversations (GET/POST), /api/messages/conversations/:id/messages (GET/POST), /api/messages/conversations/:id/read (POST)
+- /api/projects (GET/POST), /api/projects/:id (GET/PATCH), /api/projects?sort=
+- /api/projects/:id/support-records (POST), /api/support-records/:id/owner-confirm (POST)
+- /api/notifications (GET), /api/notifications/:id/read (POST)
+- /api/me/preferences (GET/PUT), /api/me/notification-settings (GET/PUT)
+
+実装ルール:
+- Svelteコンポーネントを適切に分割し、1ファイルが巨大にならないようにする
+- バリデーションとエラーステートを最低限入れる
+- メール送信は email_outbox 配列に積むだけのモックでOK
