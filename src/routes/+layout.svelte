@@ -27,6 +27,14 @@
   ];
 </script>
 
+<svelte:head>
+  <title>Growth Hach</title>
+  <meta
+    name="description"
+    content="ハッカソンで生まれた作品の継続開発を後押しするコミュニティサービス。進捗の可視化、助け合い、応援でプロジェクトを育てます。"
+  />
+</svelte:head>
+
 <div class="min-h-screen flex flex-col">
   <!-- Navbar -->
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
