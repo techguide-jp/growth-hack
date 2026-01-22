@@ -4,9 +4,14 @@
         projects,
         supportRecords,
         messages,
+        timelinePosts,
+        conversations,
+        userPreferences,
+        users,
     } from "$lib/stores/mock";
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
-    import { Plus, Gift, MessageSquare } from "lucide-svelte";
+    import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import { Plus, Gift, MessageSquare, HelpCircle } from "lucide-svelte";
 
     $: myProjects = $projects.filter((p) => p.ownerId === $currentUser?.id);
 
@@ -16,9 +21,45 @@
         (r) =>
             myProjectIds.includes(r.projectId) && r.status === "awaiting_owner",
     );
+
+    // Unresolved Questions
+    $: myUnresolvedQuestions = $timelinePosts.filter(
+        (p) =>
+            p.authorId === $currentUser?.id &&
+            p.type === "question" &&
+            p.status === "open",
+    );
+
+    // Unread Messages (Mock: Showing recent conversations)
+    $: myConversations = $conversations
+        .filter((c) => c.memberIds.includes($currentUser?.id ?? ""))
+        .sort(
+            (a, b) =>
+                new Date(b.lastMessageAt).getTime() -
+                new Date(a.lastMessageAt).getTime(),
+        );
+
+    // Focus Mode
+    $: myPreferences = $userPreferences.find(
+        (p) => p.userId === $currentUser?.id,
+    );
+    $: focusModes = myPreferences?.focusModes || [];
+
+    // Helper to get conversation partner
+    function getPartner(memberIds: string[]) {
+        const partnerId = memberIds.find((id) => id !== $currentUser?.id);
+        return $users.find((u) => u.id === partnerId);
+    }
+
+    function getLastMessage(conversationId: string) {
+        const msgs = $messages.filter(
+            (m) => m.conversationId === conversationId,
+        );
+        return msgs[msgs.length - 1];
+    }
 </script>
 
-<div class="max-w-7xl mx-auto py-8">
+<div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
     <div class="flex items-center gap-4 mb-8">
         <img
             src={$currentUser?.avatarUrl}
@@ -30,12 +71,41 @@
                 {$currentUser?.name}のダッシュボード
             </h1>
             <p class="text-gray-500">{$currentUser?.email}</p>
+            <div class="flex gap-2 mt-2">
+                {#each focusModes as mode}
+                    <span
+                        class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200"
+                    >
+                        #{mode}
+                    </span>
+                {/each}
+            </div>
         </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Left: Projects -->
+        <!-- Main Column -->
         <div class="lg:col-span-2 space-y-8">
+            <!-- Unresolved Questions -->
+            {#if myUnresolvedQuestions.length > 0}
+                <section>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2
+                            class="text-xl font-bold text-gray-900 flex items-center"
+                        >
+                            <HelpCircle class="w-5 h-5 mr-2 text-amber-500" />
+                            未解決の相談
+                        </h2>
+                    </div>
+                    <div class="space-y-4">
+                        {#each myUnresolvedQuestions as post}
+                            <TimelinePostCard {post} compact />
+                        {/each}
+                    </div>
+                </section>
+            {/if}
+
+            <!-- Projects -->
             <section>
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-xl font-bold text-gray-900">
@@ -63,7 +133,7 @@
             </section>
         </div>
 
-        <!-- Right: Notifications / Pending Actions -->
+        <!-- Sidebar -->
         <div class="space-y-6">
             <!-- Support Pending -->
             <div
@@ -103,6 +173,74 @@
                             承認待ちはありません
                         </div>
                     {/if}
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div
+                class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+            >
+                <div
+                    class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between"
+                >
+                    <h3 class="font-bold text-gray-900 flex items-center">
+                        <MessageSquare class="w-4 h-4 mr-2" /> メッセージ
+                    </h3>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    {#each myConversations as conversation}
+                        {@const partner = getPartner(conversation.memberIds)}
+                        {@const lastMsg = getLastMessage(conversation.id)}
+                        <a
+                            href="/messages/{conversation.id}"
+                            class="block p-3 hover:bg-gray-50 transition-colors"
+                        >
+                            <div class="flex items-center gap-3">
+                                {#if partner}
+                                    <img
+                                        src={partner.avatarUrl}
+                                        class="w-10 h-10 rounded-full bg-gray-200"
+                                        alt=""
+                                    />
+                                {:else}
+                                    <div
+                                        class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center"
+                                    >
+                                        <MessageSquare
+                                            class="w-5 h-5 text-gray-400"
+                                        />
+                                    </div>
+                                {/if}
+                                <div class="flex-1 min-w-0">
+                                    <div
+                                        class="flex justify-between items-center mb-0.5"
+                                    >
+                                        <div class="font-bold text-sm truncate">
+                                            {partner
+                                                ? partner.name
+                                                : "Group/Unknown"}
+                                        </div>
+                                        <div
+                                            class="text-xs text-gray-400 whitespace-nowrap ml-2"
+                                        >
+                                            {new Date(
+                                                conversation.lastMessageAt,
+                                            ).toLocaleDateString()}
+                                        </div>
+                                    </div>
+                                    <div class="text-sm text-gray-500 truncate">
+                                        {lastMsg
+                                            ? lastMsg.body
+                                            : "まだメッセージはありません"}
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    {:else}
+                        <div class="p-4 text-sm text-gray-500 text-center">
+                            メッセージはありません
+                        </div>
+                    {/each}
                 </div>
             </div>
         </div>
