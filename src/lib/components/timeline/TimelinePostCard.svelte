@@ -8,6 +8,7 @@
     import { ja } from "date-fns/locale";
 
     export let post: TimelinePost;
+    export let compact = false;
 
     $: author = getUser(post.authorId);
     $: project = post.projectId ? getProject(post.projectId) : null;
@@ -32,7 +33,9 @@
 </script>
 
 <div
-    class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4 hover:shadow-md transition-shadow"
+    class={`bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow ${
+        compact ? "p-4 mb-3" : "p-5 mb-4"
+    }`}
 >
     <!-- Header -->
     <div class="flex items-start justify-between mb-3">
