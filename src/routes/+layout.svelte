@@ -11,7 +11,7 @@
     Rocket,
     LayoutDashboard,
     Calendar,
-    LogOut
+    Settings
   } from 'lucide-svelte';
 
   let isMenuOpen = false;
@@ -69,6 +69,9 @@
           </a>
           <a href="/notifications" class="p-2 text-gray-400 hover:text-gray-500">
             <Bell class="w-6 h-6" />
+          </a>
+          <a href="/settings" class="p-2 text-gray-400 hover:text-gray-500">
+            <Settings class="w-6 h-6" />
           </a>
           
           <!-- User Dropdown (Mock) -->
@@ -129,6 +132,12 @@
              <div class="flex items-center">
               <User class="w-5 h-5 mr-3" />
               プロフィール
+            </div>
+          </a>
+          <a href="/settings" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700">
+             <div class="flex items-center">
+              <Settings class="w-5 h-5 mr-3" />
+              設定
             </div>
           </a>
         </div>

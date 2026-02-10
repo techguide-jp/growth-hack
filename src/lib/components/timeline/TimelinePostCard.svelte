@@ -47,15 +47,19 @@
             />
             <div>
                 <div class="flex items-center gap-2">
-                    <span class="font-bold text-gray-900"
-                        >{$author?.name ?? "Unknown"}</span
+                    <a
+                        href={$author ? `/users/${$author.id}` : "#"}
+                        class="font-bold text-gray-900 hover:text-indigo-600"
                     >
+                        {$author?.name ?? "Unknown"}
+                    </a>
                     {#if $project}
-                        <span
+                        <a
+                            href="/projects/{$project.id}"
                             class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium truncate max-w-[150px]"
                         >
                             {$project.title}
-                        </span>
+                        </a>
                     {/if}
                 </div>
                 <div class="flex items-center text-xs text-gray-500 gap-2">

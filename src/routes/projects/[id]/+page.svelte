@@ -62,8 +62,9 @@
                     <p class="text-lg text-gray-600 mb-6">{project.summary}</p>
 
                     <!-- Owner -->
-                    <div
-                        class="flex items-center gap-3 mb-6 p-3 bg-gray-50 rounded-lg inline-flex"
+                    <a
+                        href={owner ? `/users/${owner.id}` : "#"}
+                        class="flex items-center gap-3 mb-6 p-3 bg-gray-50 rounded-lg inline-flex hover:bg-gray-100 transition-colors"
                     >
                         <img
                             src={owner?.avatarUrl}
@@ -76,7 +77,7 @@
                                 {owner?.name || "Unknown"}
                             </div>
                         </div>
-                    </div>
+                    </a>
 
                     <!-- Links -->
                     <div class="flex gap-3">
