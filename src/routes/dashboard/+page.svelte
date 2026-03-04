@@ -111,11 +111,12 @@
                     <h2 class="text-xl font-bold text-gray-900">
                         自分のプロジェクト ({myProjects.length})
                     </h2>
-                    <button
-                        class="flex items-center text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100"
+                    <a
+                        href="/projects/new"
+                        class="inline-flex items-center text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100"
                     >
                         <Plus class="w-4 h-4 mr-1" /> 新規作成
-                    </button>
+                    </a>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

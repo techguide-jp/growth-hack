@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { Project } from "$lib/stores/mock/data";
     import { getUser } from "$lib/stores/mock";
+    import { getProjectStatusInfo } from "$lib/constants/project";
     import { Calendar, Tag } from "lucide-svelte";
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
@@ -9,6 +10,7 @@
 
     $: ownerStore = getUser(project.ownerId);
     $: owner = $ownerStore;
+    $: statusInfo = getProjectStatusInfo(project.status);
 </script>
 
 <a
@@ -34,9 +36,10 @@
         <!-- Status Badge -->
         <div class="absolute top-2 right-2">
             <span
-                class="px-2 py-1 text-xs font-bold rounded bg-white/90 backdrop-blur text-gray-800 shadow-sm border border-gray-100 uppercase"
+                class="px-2 py-1 text-xs font-bold rounded border backdrop-blur shadow-sm {statusInfo.badgeClass}"
+                title={statusInfo.description}
             >
-                {project.status}
+                {statusInfo.label}
             </span>
         </div>
     </div>
