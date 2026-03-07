@@ -26,6 +26,8 @@ Use pnpm (see `pnpm-lock.yaml`).
 - Components use PascalCase filenames (e.g., `ProjectCard.svelte`).
 - Route files follow SvelteKit conventions (`+page.svelte`, `+layout.svelte`, `+server.ts`).
 - Tailwind CSS is configured via `@import "tailwindcss"` in `src/app.css`.
+- When working on Svelte or SvelteKit files in this repository, use the `$svelte5-runes` skill.
+- Standardize first-party `.svelte` files on Svelte 5 rune syntax. Prefer `$props()`, `$bindable()`, `$state()`, `$derived()`, `$effect()`, `onclick`, snippet props, and `{@render ...}`. Avoid legacy patterns such as `export let`, `$:`, `on:`, `<slot>`, `<svelte:component>`, `createEventDispatcher`, `$app/stores`, and legacy lifecycle APIs unless the repository explicitly requires compatibility.
 
 ## Testing Guidelines
 
