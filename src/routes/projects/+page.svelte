@@ -1,12 +1,48 @@
 <script lang="ts">
-    import { projects } from "$lib/stores/mock";
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
+    import type {
+        ProjectHelpType,
+        ProjectStage,
+        ProjectStatus,
+    } from "$lib/shared/domain";
     import { Search, Filter, Plus } from "lucide-svelte";
 
-    // Sort logic (Mock)
+    export let data: {
+        query: string;
+        projects: Array<{
+            id: string;
+            ownerId: string;
+            ownerName: string | null;
+            ownerAvatarUrl: string | null;
+            title: string;
+            oneLiner: string;
+            problemStatement: string;
+            projectStage: ProjectStage | null;
+            helpTypes: ProjectHelpType[];
+            helpRequest: string;
+            highlights: string[];
+            nextMilestone: string;
+            feedbackRequest: string;
+            backgroundNote: string;
+            publicUrl?: string;
+            repoUrl?: string;
+            demoUrl?: string;
+            tags: string[];
+            images: string[];
+            status: ProjectStatus;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
+
     let sort = "updated_desc";
-    $: sortedProjects = [...$projects].sort((a, b) => {
-        // Default updated
+    $: sortedProjects = [...data.projects].sort((a, b) => {
+        if (sort === "newest") {
+            return (
+                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+        }
+
         return (
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
@@ -24,16 +60,18 @@
 
     <!-- Controls -->
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-8">
-        <div class="relative flex-1 sm:max-w-xs">
+        <form method="GET" class="relative flex-1 sm:max-w-xs">
             <Search
                 class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
             />
             <input
                 type="text"
+                name="q"
+                value={data.query}
                 placeholder="キーワードで検索..."
                 class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
             />
-        </div>
+        </form>
         <div class="flex items-center gap-2">
             <button
                 class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -74,4 +112,3 @@
         </div>
     {/if}
 </div>
-
