@@ -53,12 +53,17 @@
 
     const project = data.project;
     let activeTab = "overview";
+    let activeImageIndex = 0;
     $: statusInfo = getProjectStatusInfo(project.status);
     $: stageInfo = getProjectStageInfo(project.projectStage);
     $: helpTypeInfo = project.helpTypes.map((helpType) => ({
         value: helpType,
         ...getProjectHelpTypeInfo(helpType),
     }));
+    $: heroImage = project.images[activeImageIndex] ?? null;
+    $: if (activeImageIndex >= project.images.length) {
+        activeImageIndex = 0;
+    }
     $: publishChecklist = getProjectPublishChecklist({
         highlights: project.highlights,
         nextMilestone: project.nextMilestone,
@@ -78,10 +83,10 @@
             <div
                 class="w-full md:w-1/2 aspect-video bg-gray-100 rounded-xl overflow-hidden shadow-sm relative"
             >
-                {#if project.images.length > 0}
+                {#if heroImage}
                     <img
-                        src={project.images[0]}
-                        alt=""
+                        src={heroImage}
+                        alt={`${project.title} のスクリーンショット`}
                         class="w-full h-full object-cover"
                     />
                 {:else}
@@ -89,6 +94,26 @@
                         class="flex items-center justify-center h-full text-gray-400 font-bold"
                     >
                         NO IMAGE
+                    </div>
+                {/if}
+
+                {#if project.images.length > 1}
+                    <div class="absolute inset-x-0 bottom-0 flex gap-2 overflow-x-auto bg-gradient-to-t from-black/60 to-transparent p-3">
+                        {#each project.images as imageUrl, index}
+                            <button
+                                type="button"
+                                class="overflow-hidden rounded-lg border-2 transition {index === activeImageIndex
+                                    ? 'border-white shadow-lg'
+                                    : 'border-white/40 opacity-80 hover:opacity-100'}"
+                                on:click={() => (activeImageIndex = index)}
+                            >
+                                <img
+                                    src={imageUrl}
+                                    alt={`${project.title} のスクリーンショット ${index + 1}`}
+                                    class="h-14 w-24 object-cover"
+                                />
+                            </button>
+                        {/each}
                     </div>
                 {/if}
             </div>

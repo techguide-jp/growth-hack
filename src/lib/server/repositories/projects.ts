@@ -1,6 +1,10 @@
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { getDb } from "$lib/server/db";
 import {
+  deleteProjectScreenshotFiles,
+  saveProjectScreenshotFiles,
+} from "$lib/server/projects/screenshots";
+import {
   projectEvents,
   projectMembers,
   projectScreenshots,
@@ -22,6 +26,11 @@ type ListProjectsOptions = {
   statuses?: ProjectStatus[];
   search?: string;
   limit?: number;
+};
+
+type ProjectAssetOptions = {
+  keptImageUrls?: string[];
+  screenshotFiles?: File[];
 };
 
 export type ProjectView = {
@@ -81,14 +90,16 @@ function toProjectView(
   };
 }
 
-async function enrichProjects(projectRows: typeof projects.$inferSelect[]) {
+async function enrichProjects(projectRows: (typeof projects.$inferSelect)[]) {
   if (projectRows.length === 0) {
     return [];
   }
 
   const db = getDb();
   const projectIds = projectRows.map((project) => project.id);
-  const ownerIds = [...new Set(projectRows.map((project) => project.ownerUserId))];
+  const ownerIds = [
+    ...new Set(projectRows.map((project) => project.ownerUserId)),
+  ];
 
   const [ownerRows, tagRows, screenshotRows] = await Promise.all([
     db.select().from(users).where(inArray(users.id, ownerIds)),
@@ -207,54 +218,65 @@ export async function listProjects(options: ListProjectsOptions = {}) {
 export async function createProject(
   ownerUserId: string,
   input: CreateProjectInput,
+  options: ProjectAssetOptions = {},
 ) {
   const db = getDb();
   const projectId = crypto.randomUUID();
   const now = new Date();
+  const uploadedImageUrls = await saveProjectScreenshotFiles(
+    projectId,
+    options.screenshotFiles ?? [],
+  );
 
-  await db.transaction(async (tx) => {
-    await tx.insert(projects).values({
-      id: projectId,
-      ownerUserId,
-      title: input.title,
-      summary: input.oneLiner,
-      problemStatement: input.problemStatement ?? "",
-      projectStage: input.projectStage ?? null,
-      helpTypes: input.helpTypes,
-      helpRequest: input.helpRequest ?? "",
-      highlights: input.highlights,
-      nextMilestone: input.nextMilestone ?? "",
-      feedbackRequest: input.feedbackRequest ?? "",
-      description: input.backgroundNote ?? "",
-      publicUrl: input.publicUrl ?? null,
-      repoUrl: input.repoUrl ?? null,
-      demoUrl: input.demoUrl ?? null,
-      status: input.status,
-      createdAt: now,
-      updatedAt: now,
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(projects).values({
+        id: projectId,
+        ownerUserId,
+        title: input.title,
+        summary: input.oneLiner,
+        problemStatement: input.problemStatement ?? "",
+        projectStage: input.projectStage ?? null,
+        helpTypes: input.helpTypes,
+        helpRequest: input.helpRequest ?? "",
+        highlights: input.highlights,
+        nextMilestone: input.nextMilestone ?? "",
+        feedbackRequest: input.feedbackRequest ?? "",
+        description: input.backgroundNote ?? "",
+        publicUrl: input.publicUrl ?? null,
+        repoUrl: input.repoUrl ?? null,
+        demoUrl: input.demoUrl ?? null,
+        status: input.status,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await tx.insert(projectMembers).values({
+        projectId,
+        userId: ownerUserId,
+        memberRole: "owner",
+        joinedAt: now,
+      });
+
+      if (input.eventIds.length > 0) {
+        await tx
+          .insert(projectEvents)
+          .values(
+            input.eventIds.map((eventId) => ({
+              projectId,
+              eventId,
+            })),
+          )
+          .onConflictDoNothing();
+      }
+
+      await syncProjectTags(tx, projectId, input.tags, now);
+      await syncProjectScreenshots(tx, projectId, uploadedImageUrls, now);
     });
-
-    await tx.insert(projectMembers).values({
-      projectId,
-      userId: ownerUserId,
-      memberRole: "owner",
-      joinedAt: now,
-    });
-
-    if (input.eventIds.length > 0) {
-      await tx
-        .insert(projectEvents)
-        .values(
-          input.eventIds.map((eventId) => ({
-            projectId,
-            eventId,
-          })),
-        )
-        .onConflictDoNothing();
-    }
-
-    await syncProjectTags(tx, projectId, input.tags, now);
-  });
+  } catch (error) {
+    await deleteProjectScreenshotFiles(uploadedImageUrls);
+    throw error;
+  }
 
   return getProjectViewById(projectId);
 }
@@ -262,12 +284,28 @@ export async function createProject(
 export async function updateProject(
   projectId: string,
   input: UpdateProjectInput,
+  options: ProjectAssetOptions = {},
 ) {
   const db = getDb();
   const now = new Date();
+  const currentProject = await getProjectViewById(projectId);
+
+  if (!currentProject) {
+    return null;
+  }
+
   const updateValues: Partial<typeof projects.$inferInsert> = {
     updatedAt: now,
   };
+  const keptImageUrls = options.keptImageUrls ?? currentProject.images;
+  const removedImageUrls = currentProject.images.filter(
+    (imageUrl) => !keptImageUrls.includes(imageUrl),
+  );
+  const uploadedImageUrls = await saveProjectScreenshotFiles(
+    projectId,
+    options.screenshotFiles ?? [],
+  );
+  const nextImageUrls = [...keptImageUrls, ...uploadedImageUrls];
 
   if (input.title !== undefined) {
     updateValues.title = input.title;
@@ -325,30 +363,44 @@ export async function updateProject(
     updateValues.status = input.status;
   }
 
-  await db.transaction(async (tx) => {
-    await tx.update(projects).set(updateValues).where(eq(projects.id, projectId));
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(projects)
+        .set(updateValues)
+        .where(eq(projects.id, projectId));
 
-    if (input.eventIds !== undefined) {
-      await tx.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
-
-      if (input.eventIds.length > 0) {
+      if (input.eventIds !== undefined) {
         await tx
-          .insert(projectEvents)
-          .values(
-            input.eventIds.map((eventId) => ({
-              projectId,
-              eventId,
-            })),
-          )
-          .onConflictDoNothing();
-      }
-    }
+          .delete(projectEvents)
+          .where(eq(projectEvents.projectId, projectId));
 
-    if (input.tags !== undefined) {
-      await tx.delete(projectTags).where(eq(projectTags.projectId, projectId));
-      await syncProjectTags(tx, projectId, input.tags, now);
-    }
-  });
+        if (input.eventIds.length > 0) {
+          await tx
+            .insert(projectEvents)
+            .values(
+              input.eventIds.map((eventId) => ({
+                projectId,
+                eventId,
+              })),
+            )
+            .onConflictDoNothing();
+        }
+      }
+
+      if (input.tags !== undefined) {
+        await tx.delete(projectTags).where(eq(projectTags.projectId, projectId));
+        await syncProjectTags(tx, projectId, input.tags, now);
+      }
+
+      await syncProjectScreenshots(tx, projectId, nextImageUrls, now);
+    });
+  } catch (error) {
+    await deleteProjectScreenshotFiles(uploadedImageUrls);
+    throw error;
+  }
+
+  await deleteProjectScreenshotFiles(removedImageUrls);
 
   return getProjectViewById(projectId);
 }
@@ -374,7 +426,10 @@ async function syncProjectTags(
     )
     .onConflictDoNothing();
 
-  const persistedTags = await tx.select().from(tags).where(inArray(tags.name, names));
+  const persistedTags = await tx
+    .select()
+    .from(tags)
+    .where(inArray(tags.name, names));
 
   if (persistedTags.length === 0) {
     return;
@@ -389,6 +444,31 @@ async function syncProjectTags(
       })),
     )
     .onConflictDoNothing();
+}
+
+async function syncProjectScreenshots(
+  tx: any,
+  projectId: string,
+  imageUrls: string[],
+  now: Date,
+) {
+  await tx
+    .delete(projectScreenshots)
+    .where(eq(projectScreenshots.projectId, projectId));
+
+  if (imageUrls.length === 0) {
+    return;
+  }
+
+  await tx.insert(projectScreenshots).values(
+    imageUrls.map((imageUrl, index) => ({
+      id: crypto.randomUUID(),
+      projectId,
+      imageUrl,
+      sortOrder: index,
+      createdAt: now,
+    })),
+  );
 }
 
 export async function listProjectMembers(projectId: string) {

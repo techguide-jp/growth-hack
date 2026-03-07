@@ -88,7 +88,13 @@ export interface ProjectHelpTypeInfo {
   description: string;
 }
 
-export const PROJECT_HELP_TYPE_MAP: Record<ProjectHelpType, ProjectHelpTypeInfo> = {
+export const PROJECT_SCREENSHOT_MAX_COUNT = 5;
+export const PROJECT_SCREENSHOT_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+
+export const PROJECT_HELP_TYPE_MAP: Record<
+  ProjectHelpType,
+  ProjectHelpTypeInfo
+> = {
   feedback: {
     label: "フィードバック",
     description: "方向性や使い勝手への率直な意見がほしい",

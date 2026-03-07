@@ -7,6 +7,10 @@ import {
   resolveTargetStatus,
   validateProjectFormValues,
 } from "$lib/server/projects/form";
+import {
+  getProjectScreenshotFiles,
+  validateProjectScreenshots,
+} from "$lib/server/projects/screenshots";
 
 export const load: PageServerLoad = (event) => {
   requireOnboarded(event);
@@ -19,10 +23,24 @@ export const actions: Actions = {
     const user = requireOnboarded(event);
     const formData = await event.request.formData();
     const values = getProjectFormValues(formData);
+    const screenshotFiles = getProjectScreenshotFiles(formData);
+    const screenshotMessage = validateProjectScreenshots({
+      files: screenshotFiles,
+      keptImageUrls: [],
+    });
+
+    if (screenshotMessage) {
+      return fail(400, {
+        message: screenshotMessage,
+        values,
+      });
+    }
+
     const targetStatus = resolveTargetStatus(values.statusIntent);
     const result = validateProjectFormValues(values, {
       targetStatus,
       currentStatus: "draft",
+      pendingImageCount: screenshotFiles.length,
     });
 
     if (!result.success) {
@@ -32,7 +50,9 @@ export const actions: Actions = {
       });
     }
 
-    const project = await createProject(user.id, result.data);
+    const project = await createProject(user.id, result.data, {
+      screenshotFiles,
+    });
 
     if (!project) {
       return fail(500, {

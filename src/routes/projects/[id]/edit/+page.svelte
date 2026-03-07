@@ -47,6 +47,7 @@
                   repoUrl?: string;
                   demoUrl?: string;
                   tags?: string;
+                  keptImagesJson?: string;
                   statusIntent?: string;
               };
           }

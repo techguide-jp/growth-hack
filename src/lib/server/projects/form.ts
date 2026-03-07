@@ -23,6 +23,7 @@ export type ProjectFormValues = {
   repoUrl: string;
   demoUrl: string;
   tags: string;
+  keptImagesJson: string;
   statusIntent: string;
 };
 
@@ -30,6 +31,7 @@ type ProjectValidationContext = {
   targetStatus: ProjectStatus;
   currentStatus?: ProjectStatus;
   existingImageCount?: number;
+  pendingImageCount?: number;
 };
 
 type ValidationResult =
@@ -76,6 +78,7 @@ export function getProjectFormValues(formData: FormData): ProjectFormValues {
     repoUrl: getStringEntry(formData, "repoUrl"),
     demoUrl: getStringEntry(formData, "demoUrl"),
     tags: getStringEntry(formData, "tags"),
+    keptImagesJson: getStringEntry(formData, "keptImagesJson"),
     statusIntent: getStringEntry(formData, "statusIntent"),
   };
 }
@@ -143,6 +146,19 @@ function getPublishRequirementMessage(
   return `公開前チェックが未完了です。「${missing.label}」を埋めてください。`;
 }
 
+function getChecklistImages(
+  existingImageCount: number,
+  pendingImageCount: number,
+) {
+  const count = existingImageCount + pendingImageCount;
+
+  if (count === 0) {
+    return [];
+  }
+
+  return Array.from({ length: count }, (_, index) => `image-${index + 1}`);
+}
+
 export function validateProjectFormValues(
   values: ProjectFormValues,
   context: ProjectValidationContext,
@@ -175,12 +191,10 @@ export function validateProjectFormValues(
     repoUrl: values.repoUrl,
     demoUrl: values.demoUrl,
     images:
-      (context.existingImageCount ?? 0) > 0
-        ? Array.from(
-            { length: context.existingImageCount ?? 0 },
-            () => "existing",
-          )
-        : [],
+      getChecklistImages(
+        context.existingImageCount ?? 0,
+        context.pendingImageCount ?? 0,
+      ),
   });
 
   if (!parsed.success) {
@@ -201,12 +215,10 @@ export function validateProjectFormValues(
     repoUrl: parsed.data.repoUrl,
     demoUrl: parsed.data.demoUrl,
     images:
-      (context.existingImageCount ?? 0) > 0
-        ? Array.from(
-            { length: context.existingImageCount ?? 0 },
-            () => "existing",
-          )
-        : [],
+      getChecklistImages(
+        context.existingImageCount ?? 0,
+        context.pendingImageCount ?? 0,
+      ),
   });
 
   if (

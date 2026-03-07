@@ -11,6 +11,11 @@ import {
   resolveTargetStatus,
   validateProjectFormValues,
 } from "$lib/server/projects/form";
+import {
+  getProjectScreenshotFiles,
+  parseKeptProjectScreenshotUrls,
+  validateProjectScreenshots,
+} from "$lib/server/projects/screenshots";
 
 export const load: PageServerLoad = async (event) => {
   const user = requireOnboarded(event);
@@ -38,6 +43,34 @@ export const actions: Actions = {
 
     const formData = await event.request.formData();
     const values = getProjectFormValues(formData);
+    const keptImageUrls =
+      parseKeptProjectScreenshotUrls(formData.get("keptImagesJson"));
+
+    if (keptImageUrls === null) {
+      return fail(400, {
+        message:
+          "スクリーンショット情報の読み取りに失敗しました。画面を再読み込みしてやり直してください。",
+        values,
+      });
+    }
+
+    const screenshotFiles = getProjectScreenshotFiles(formData);
+    const screenshotMessage = validateProjectScreenshots({
+      files: screenshotFiles,
+      keptImageUrls,
+      allowedImageUrls: currentProject.images,
+    });
+
+    if (screenshotMessage) {
+      return fail(400, {
+        message: screenshotMessage,
+        values: {
+          ...values,
+          keptImagesJson: JSON.stringify(keptImageUrls),
+        },
+      });
+    }
+
     const targetStatus = resolveTargetStatus(
       values.statusIntent,
       currentProject.status,
@@ -45,22 +78,32 @@ export const actions: Actions = {
     const result = validateProjectFormValues(values, {
       targetStatus,
       currentStatus: currentProject.status,
-      existingImageCount: currentProject.images.length,
+      existingImageCount: keptImageUrls.length,
+      pendingImageCount: screenshotFiles.length,
     });
 
     if (!result.success) {
       return fail(400, {
         message: result.message,
-        values,
+        values: {
+          ...values,
+          keptImagesJson: JSON.stringify(keptImageUrls),
+        },
       });
     }
 
-    const project = await updateProject(event.params.id, result.data);
+    const project = await updateProject(event.params.id, result.data, {
+      keptImageUrls,
+      screenshotFiles,
+    });
 
     if (!project) {
       return fail(500, {
         message: "プロジェクトの更新に失敗しました。",
-        values,
+        values: {
+          ...values,
+          keptImagesJson: JSON.stringify(keptImageUrls),
+        },
       });
     }
 

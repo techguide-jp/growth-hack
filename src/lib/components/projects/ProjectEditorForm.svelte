@@ -2,6 +2,8 @@
     import ProjectHelpTypePicker from "$lib/components/projects/ProjectHelpTypePicker.svelte";
     import ProjectTagInput from "$lib/components/projects/ProjectTagInput.svelte";
     import {
+        PROJECT_SCREENSHOT_MAX_COUNT,
+        PROJECT_SCREENSHOT_MAX_SIZE_BYTES,
         PROJECT_STAGE_MAP,
         getProjectPublishChecklist,
         getProjectStageInfo,
@@ -27,6 +29,7 @@
         repoUrl?: string;
         demoUrl?: string;
         tags?: string;
+        keptImagesJson?: string;
         statusIntent?: string;
     };
 
@@ -69,6 +72,28 @@
             .split(",")
             .map((item) => item.trim())
             .filter((item) => item.length > 0);
+    }
+
+    function parseJsonStringArray(raw: string | undefined) {
+        if (raw === undefined) {
+            return null;
+        }
+
+        if (raw.trim().length === 0) {
+            return [];
+        }
+
+        try {
+            const parsed = JSON.parse(raw);
+
+            if (!Array.isArray(parsed)) {
+                return [];
+            }
+
+            return parsed.filter((item): item is string => typeof item === "string");
+        } catch {
+            return [];
+        }
     }
 
     function getKeepButtonLabel(status: ProjectStatus) {
@@ -125,13 +150,35 @@
     let repoUrl = form?.values?.repoUrl ?? initialProject.repoUrl ?? "";
     let demoUrl = form?.values?.demoUrl ?? initialProject.demoUrl ?? "";
     let tagsValue = form?.values?.tags ?? initialProject.tags.join(",");
+    let keptImages =
+        parseJsonStringArray(form?.values?.keptImagesJson) ?? initialProject.images;
+    let screenshotInput: HTMLInputElement | undefined = undefined;
+    let selectedScreenshotFiles: FileList | null = null;
     let isSubmitting = false;
+    const screenshotSizeLimitInMb = Math.floor(
+        PROJECT_SCREENSHOT_MAX_SIZE_BYTES / 1024 / 1024,
+    );
+
+    function removeKeptImage(imageUrl: string) {
+        keptImages = keptImages.filter((currentImageUrl) => currentImageUrl !== imageUrl);
+    }
+
+    function clearSelectedScreenshots() {
+        selectedScreenshotFiles = null;
+
+        if (screenshotInput) {
+            screenshotInput.value = "";
+        }
+    }
 
     $: selectedStageInfo = getProjectStageInfo(
         projectStage ? (projectStage as ProjectStage) : null,
     );
     $: highlights = parseDelimitedValues(highlightsValue);
     $: tags = parseDelimitedValues(tagsValue);
+    $: pendingScreenshotFiles = selectedScreenshotFiles
+        ? Array.from(selectedScreenshotFiles)
+        : [];
     $: publishChecklist = getProjectPublishChecklist({
         highlights,
         nextMilestone,
@@ -140,7 +187,10 @@
         publicUrl,
         repoUrl,
         demoUrl,
-        images: initialProject.images,
+        images: [
+            ...keptImages,
+            ...pendingScreenshotFiles.map((file) => file.name),
+        ],
     });
     $: publishReady = publishChecklist.every((item) => item.complete);
     $: keepButtonLabel = getKeepButtonLabel(initialProject.status);
@@ -150,7 +200,12 @@
         !publishReady;
 </script>
 
-<form method="POST" class="space-y-8" on:submit={() => (isSubmitting = true)}>
+<form
+    method="POST"
+    enctype="multipart/form-data"
+    class="space-y-8"
+    on:submit={() => (isSubmitting = true)}
+>
     <section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <div class="mb-6">
             <p class="text-sm font-bold uppercase tracking-[0.2em] text-indigo-500">
@@ -209,7 +264,6 @@
                     name="problemStatement"
                     bind:value={problemStatement}
                     rows="4"
-                    required={mode === "create"}
                     class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="誰が困っていて、その人の何をどう良くするのかを具体的に書いてください。"
                 ></textarea>
@@ -257,7 +311,6 @@
                     name="helpRequest"
                     bind:value={helpRequest}
                     rows="4"
-                    required={mode === "create"}
                     class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="何を見てほしいか、どんな人に来てほしいか、いま止まっているポイントは何かを書いてください。"
                 ></textarea>
@@ -417,8 +470,98 @@
                     placeholder="https://demo.example.com"
                 />
                 <p class="text-xs text-gray-500">
-                    公開URL・GitHub URL・デモURL・既存スクリーンショットのいずれか1つで公開条件を満たせます。
+                    公開URL・GitHub URL・デモURL・スクリーンショットのいずれか1つで公開条件を満たせます。
                 </p>
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700" for="screenshots">
+                            スクリーンショット
+                        </label>
+                        <p class="mt-1 text-xs text-gray-500">
+                            PNG / JPEG / WebP / GIF / AVIF を最大{PROJECT_SCREENSHOT_MAX_COUNT}枚、
+                            1枚{screenshotSizeLimitInMb}MBまで登録できます。
+                        </p>
+                    </div>
+
+                    {#if pendingScreenshotFiles.length > 0}
+                        <button
+                            type="button"
+                            class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                            on:click={clearSelectedScreenshots}
+                        >
+                            選択をクリア
+                        </button>
+                    {/if}
+                </div>
+
+                <input
+                    bind:this={screenshotInput}
+                    bind:files={selectedScreenshotFiles}
+                    id="screenshots"
+                    name="screenshots"
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                    class="block w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-700"
+                />
+
+                <input
+                    type="hidden"
+                    name="keptImagesJson"
+                    value={JSON.stringify(keptImages)}
+                />
+
+                {#if keptImages.length > 0}
+                    <div class="space-y-2">
+                        <div class="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
+                            登録済み
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {#each keptImages as imageUrl, index}
+                                <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                    <img
+                                        src={imageUrl}
+                                        alt={`登録済みスクリーンショット ${index + 1}`}
+                                        class="aspect-video w-full object-cover"
+                                    />
+                                    <div class="flex items-center justify-between gap-3 px-4 py-3">
+                                        <div class="text-xs text-gray-500">
+                                            スクリーンショット {index + 1}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                                            on:click={() => removeKeptImage(imageUrl)}
+                                        >
+                                            削除
+                                        </button>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+
+                {#if pendingScreenshotFiles.length > 0}
+                    <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                        <div class="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">
+                            今回追加する画像
+                        </div>
+                        <ul class="mt-3 space-y-2 text-sm text-indigo-900">
+                            {#each pendingScreenshotFiles as file}
+                                <li class="flex items-center justify-between gap-3">
+                                    <span class="truncate">{file.name}</span>
+                                    <span class="shrink-0 text-xs text-indigo-700">
+                                        {(file.size / 1024 / 1024).toFixed(1)} MB
+                                    </span>
+                                </li>
+                            {/each}
+                        </ul>
+                    </div>
+                {/if}
             </div>
 
             <div class="space-y-2">
