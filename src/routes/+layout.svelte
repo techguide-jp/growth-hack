@@ -1,21 +1,55 @@
 <script lang="ts">
-  import '../app.css';
-  import { page } from '$app/stores';
-  import { currentUser } from '$lib/stores/mock';
-  import { 
-    Home, 
-    MessageSquare, 
-    Bell, 
-    User, 
-    Menu, 
-    Rocket,
-    LayoutDashboard,
-    Calendar,
-    Settings
-  } from 'lucide-svelte';
+	import "../app.css";
+	import { goto, invalidateAll } from "$app/navigation";
+	import { page } from "$app/stores";
+	import { authClient } from "$lib/auth-client";
+	import {
+		clearSessionState,
+		setSessionState,
+	} from "$lib/stores/session";
+	import {
+		currentUser,
+		syncMockSessionUser,
+		syncMockUserPreferences,
+	} from "$lib/stores/mock";
+	import {
+		Calendar,
+		Home,
+		LayoutDashboard,
+		Menu,
+		MessageSquare,
+		Rocket,
+		Settings,
+		User,
+		Bell,
+	} from "lucide-svelte";
+	import type { NotificationSettingsPayload, UserPreferencesState } from "$lib/shared/settings";
+	import type { SessionInfo, SessionUser } from "$lib/shared/session";
+
+	export let data: {
+		me: SessionUser | null;
+		session: SessionInfo | null;
+		isOnboarded: boolean;
+		preferences: UserPreferencesState | null;
+		notificationSettings: NotificationSettingsPayload | null;
+	};
 
   let isMenuOpen = false;
+	let isSigningOut = false;
 
+	$: {
+		if (data.me) {
+			setSessionState({
+				user: data.me,
+				session: data.session,
+				isOnboarded: data.isOnboarded,
+			});
+			syncMockSessionUser(data.me);
+			syncMockUserPreferences(data.preferences);
+		} else {
+			clearSessionState();
+		}
+	}
   $: activePath = $page.url.pathname;
   $: user = $currentUser;
 
@@ -25,6 +59,29 @@
     { label: 'プロジェクト', href: '/projects', icon: LayoutDashboard },
     { label: 'イベント', href: '/events', icon: Calendar },
   ];
+
+	async function handleSignOut() {
+		if (isSigningOut) {
+			return;
+		}
+
+		isSigningOut = true;
+
+		await authClient.signOut({
+			fetchOptions: {
+				onSuccess: async () => {
+					clearSessionState();
+					await invalidateAll();
+					await goto("/login");
+				},
+				onError: async () => {
+					isSigningOut = false;
+				},
+			},
+		});
+
+		isSigningOut = false;
+	}
 </script>
 
 <svelte:head>
@@ -78,9 +135,17 @@
           <div class="ml-3 relative flex items-center gap-2">
             {#if user}
               <a href="/dashboard" class="flex items-center gap-2 hover:bg-gray-50 p-1 rounded-full pr-3 transition">
-                <img class="h-8 w-8 rounded-full border border-gray-200" src={user.avatarUrl} alt="" />
+                <img class="h-8 w-8 rounded-full border border-gray-200" src={user.avatarUrl || "https://i.pravatar.cc/150?u=guest"} alt="" />
                 <span class="text-sm font-medium text-gray-700">{user.name}</span>
               </a>
+              <button
+                class="ml-2 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-60"
+                type="button"
+                disabled={isSigningOut}
+                on:click={handleSignOut}
+              >
+                  ログアウト
+              </button>
             {:else}
               <a href="/login" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">ログイン</a>
             {/if}
@@ -116,12 +181,12 @@
               </div>
             </a>
           {/each}
-          <a href="/messages" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700">
-            <div class="flex items-center">
-              <MessageSquare class="w-5 h-5 mr-3" />
-              メッセージ
-            </div>
-          </a>
+            <a href="/messages" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700">
+              <div class="flex items-center">
+                <MessageSquare class="w-5 h-5 mr-3" />
+                メッセージ
+              </div>
+            </a>
           <a href="/notifications" class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700">
              <div class="flex items-center">
               <Bell class="w-5 h-5 mr-3" />
@@ -140,6 +205,22 @@
               設定
             </div>
           </a>
+          {#if user}
+            <div class="px-3 pt-2">
+              <button
+                type="button"
+                class="w-full text-left text-sm text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 p-2 border border-gray-200 rounded"
+                disabled={isSigningOut}
+                on:click={handleSignOut}
+              >
+                ログアウト
+              </button>
+            </div>
+          {:else}
+            <a href="/login" class="block px-3 py-2 border-l-4 border-transparent text-base font-medium text-indigo-600 hover:bg-gray-50 hover:border-gray-300 hover:text-indigo-700">
+              ログイン
+            </a>
+          {/if}
         </div>
       </div>
     {/if}

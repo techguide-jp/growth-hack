@@ -122,7 +122,7 @@
                     required
                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="開発背景・目的・進め方などを記載"
-                />
+                ></textarea>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

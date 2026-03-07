@@ -12,6 +12,7 @@
     let showForm = false;
 
     $: isOwner = $currentUser?.id === project.ownerId;
+    $: loginHref = `/login?next=${encodeURIComponent(`/projects/${project.id}`)}`;
     $: records = $supportRecords.filter((r) => r.projectId === project.id);
     $: confirmedRecords = records.filter((r) => r.status === "confirmed");
     $: totalAmount = confirmedRecords.reduce((sum, r) => sum + r.amount, 0);
@@ -28,9 +29,11 @@
     });
 
     function handleSubmit() {
+        if (!$currentUser) return;
+
         api.createSupportRecord({
             projectId: project.id,
-            supporterId: $currentUser?.id || "guest",
+            supporterId: $currentUser.id,
             amount,
             message,
         });
@@ -80,7 +83,20 @@
     </div>
 
     <!-- Action Area -->
-    {#if !showForm}
+    {#if !$currentUser}
+        <div class="rounded-xl border border-dashed border-gray-300 bg-white p-6 text-center">
+            <p class="text-sm text-gray-600">
+                支援記録を作成するにはログインが必要です。
+            </p>
+            <a
+                href={loginHref}
+                class="mt-4 inline-flex items-center rounded-md bg-pink-600 px-4 py-2 text-sm font-bold text-white hover:bg-pink-700"
+            >
+                <Gift class="w-4 h-4 mr-2" />
+                ログインして支援を記録する
+            </a>
+        </div>
+    {:else if !showForm}
         <div class="text-center">
             <button
                 class="inline-flex items-center px-6 py-3 border border-transparent shadow-sm text-base font-bold rounded-md text-white bg-pink-600 hover:bg-pink-700"
