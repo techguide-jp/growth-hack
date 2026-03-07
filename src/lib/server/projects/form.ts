@@ -30,7 +30,6 @@ type ProjectValidationContext = {
   targetStatus: ProjectStatus;
   currentStatus?: ProjectStatus;
   existingImageCount?: number;
-  requireDraftRequirements?: boolean;
 };
 
 type ValidationResult =
@@ -50,7 +49,9 @@ function getStringEntry(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
-export function parseDelimitedValues(value: FormDataEntryValue | string | null) {
+export function parseDelimitedValues(
+  value: FormDataEntryValue | string | null,
+) {
   const raw = typeof value === "string" ? value : "";
 
   return raw
@@ -102,26 +103,15 @@ export function getLegacyProjectFoundationGap(project: {
   helpRequest: string;
 }) {
   return (
-    project.oneLiner.trim().length < 20 ||
-    project.problemStatement.trim().length < 60 ||
+    project.oneLiner.trim().length === 0 ||
+    project.problemStatement.trim().length < 10 ||
     !project.projectStage ||
     project.helpTypes.length === 0 ||
-    project.helpRequest.trim().length < 60
+    project.helpRequest.trim().length < 10
   );
 }
 
-function getDraftRequirementMessage(
-  input: CreateProjectInput,
-  requireDraftRequirements: boolean,
-) {
-  if (!requireDraftRequirements) {
-    return null;
-  }
-
-  if (input.oneLiner.trim().length < 20) {
-    return "ひとことで何を作っているかは20文字以上で入力してください。";
-  }
-
+function getFoundationRequirementMessage(input: CreateProjectInput) {
   if (!input.problemStatement) {
     return "誰のどんな課題を解決するかを入力してください。";
   }
@@ -141,7 +131,9 @@ function getDraftRequirementMessage(
   return null;
 }
 
-function getPublishRequirementMessage(checklist: ProjectPublishChecklistItem[]) {
+function getPublishRequirementMessage(
+  checklist: ProjectPublishChecklistItem[],
+) {
   const missing = checklist.find((item) => !item.complete);
 
   if (!missing) {
@@ -184,7 +176,10 @@ export function validateProjectFormValues(
     demoUrl: values.demoUrl,
     images:
       (context.existingImageCount ?? 0) > 0
-        ? Array.from({ length: context.existingImageCount ?? 0 }, () => "existing")
+        ? Array.from(
+            { length: context.existingImageCount ?? 0 },
+            () => "existing",
+          )
         : [],
   });
 
@@ -192,8 +187,7 @@ export function validateProjectFormValues(
     return {
       success: false,
       message:
-        parsed.error.issues[0]?.message ??
-        "入力内容を確認してください。",
+        parsed.error.issues[0]?.message ?? "入力内容を確認してください。",
       checklist: fallbackChecklist,
     };
   }
@@ -208,27 +202,29 @@ export function validateProjectFormValues(
     demoUrl: parsed.data.demoUrl,
     images:
       (context.existingImageCount ?? 0) > 0
-        ? Array.from({ length: context.existingImageCount ?? 0 }, () => "existing")
+        ? Array.from(
+            { length: context.existingImageCount ?? 0 },
+            () => "existing",
+          )
         : [],
   });
-
-  const draftRequirementMessage = getDraftRequirementMessage(
-    parsed.data,
-    context.requireDraftRequirements ?? true,
-  );
-
-  if (draftRequirementMessage) {
-    return {
-      success: false,
-      message: draftRequirementMessage,
-      checklist,
-    };
-  }
 
   if (
     context.targetStatus === "published" &&
     context.currentStatus !== "published"
   ) {
+    const foundationRequirementMessage = getFoundationRequirementMessage(
+      parsed.data,
+    );
+
+    if (foundationRequirementMessage) {
+      return {
+        success: false,
+        message: foundationRequirementMessage,
+        checklist,
+      };
+    }
+
     const publishRequirementMessage = getPublishRequirementMessage(checklist);
 
     if (publishRequirementMessage) {

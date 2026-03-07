@@ -46,9 +46,6 @@ export const actions: Actions = {
       targetStatus,
       currentStatus: currentProject.status,
       existingImageCount: currentProject.images.length,
-      requireDraftRequirements:
-        currentProject.status === "draft" ||
-        (targetStatus === "published" && currentProject.status !== "published"),
     });
 
     if (!result.success) {

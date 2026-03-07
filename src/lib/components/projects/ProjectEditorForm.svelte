@@ -194,7 +194,7 @@
                     class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="例: ハッカソン作品の継続開発を支えるコミュニティ基盤"
                 />
-                <p class="text-xs text-gray-500">一覧カードで最初に見える一文です。20〜80文字が目安です。</p>
+                <p class="text-xs text-gray-500">一覧カードで最初に見える一文です。下書きでは短くても保存できます。</p>
             </div>
 
             <div class="space-y-2">
@@ -213,7 +213,7 @@
                     class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="誰が困っていて、その人の何をどう良くするのかを具体的に書いてください。"
                 ></textarea>
-                <p class="text-xs text-gray-500">60〜200文字。読む人が支援先を判断できる粒度にします。</p>
+                <p class="text-xs text-gray-500">下書きでは短くても保存できます。公開前に、支援先が伝わる粒度まで整えてください。</p>
             </div>
 
             <div class="space-y-3">
@@ -261,7 +261,7 @@
                     class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500"
                     placeholder="何を見てほしいか、どんな人に来てほしいか、いま止まっているポイントは何かを書いてください。"
                 ></textarea>
-                <p class="text-xs text-gray-500">60〜280文字。レビュー依頼か仲間募集かが分かるようにします。</p>
+                <p class="text-xs text-gray-500">下書きでは短くても保存できます。公開前に、何を頼みたいかが伝わる内容に整えてください。</p>
             </div>
         </div>
     </section>
@@ -321,7 +321,7 @@
                     maxItems={3}
                     placeholder="例: 相談投稿に固定テンプレを出せる"
                     emptyStateLabel="見どころを追加"
-                    helperText="1項目ずつ Enter で追加。15〜60文字の見どころを最大3件まで登録できます。"
+                    helperText="1項目ずつ Enter で追加。5〜60文字の見どころを最大3件まで登録できます。"
                 />
             </div>
 

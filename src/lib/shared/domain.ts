@@ -14,7 +14,11 @@ function textFieldSchema(label: string, maxLength: number) {
     .max(maxLength, `${label}は${maxLength}文字以内で入力してください。`);
 }
 
-function boundedTextFieldSchema(label: string, minLength: number, maxLength: number) {
+function boundedTextFieldSchema(
+  label: string,
+  minLength: number,
+  maxLength: number,
+) {
   return z
     .string()
     .trim()
@@ -29,10 +33,7 @@ function optionalTextFieldSchema(label: string, maxLength: number) {
   );
 }
 
-const urlFieldSchema = z
-  .string()
-  .trim()
-  .url("URL形式で入力してください。");
+const urlFieldSchema = z.string().trim().url("URL形式で入力してください。");
 const isoDatetimeStringSchema = z
   .string()
   .trim()
@@ -128,8 +129,7 @@ export type CommentTargetType = (typeof COMMENT_TARGET_TYPE_VALUES)[number];
 export type ReactionTargetType = (typeof REACTION_TARGET_TYPE_VALUES)[number];
 export type ReactionKind = (typeof REACTION_KIND_VALUES)[number];
 export type FollowTargetType = (typeof FOLLOW_TARGET_TYPE_VALUES)[number];
-export type SupportRecordStatus =
-  (typeof SUPPORT_RECORD_STATUS_VALUES)[number];
+export type SupportRecordStatus = (typeof SUPPORT_RECORD_STATUS_VALUES)[number];
 export type HelpWantedStatus = (typeof HELP_WANTED_STATUS_VALUES)[number];
 export type JoinRequestStatus = (typeof JOIN_REQUEST_STATUS_VALUES)[number];
 export type ConversationType = (typeof CONVERSATION_TYPE_VALUES)[number];
@@ -168,7 +168,9 @@ export const projectTagsSchema = z
   .array(projectTagSchema)
   .max(20, "タグは20件以内で入力してください。")
   .refine(
-    (values) => new Set(values.map((value) => value.toLowerCase())).size === values.length,
+    (values) =>
+      new Set(values.map((value) => value.toLowerCase())).size ===
+      values.length,
     {
       message: "タグは重複して登録できません。",
     },
@@ -182,33 +184,45 @@ export const projectHelpTypesSchema = z
   });
 
 export const projectHighlightsSchema = z
-  .array(boundedTextFieldSchema("できること・見どころ", 15, 60))
+  .array(boundedTextFieldSchema("できること・見どころ", 5, 60))
   .max(3, "できること・見どころは3件以内で入力してください。")
-  .refine((values) => new Set(values.map((value) => value.toLowerCase())).size === values.length, {
-    message: "できること・見どころは重複して登録できません。",
-  });
+  .refine(
+    (values) =>
+      new Set(values.map((value) => value.toLowerCase())).size ===
+      values.length,
+    {
+      message: "できること・見どころは重複して登録できません。",
+    },
+  );
 
 export const createProjectInputSchema = z.object({
   title: textFieldSchema("プロジェクト名", 120),
   oneLiner: textFieldSchema("ひとことで何を作っているか", 80),
   problemStatement: z.preprocess(
     emptyStringToUndefined,
-    boundedTextFieldSchema("誰のどんな課題を解決するか", 60, 200).optional(),
+    boundedTextFieldSchema("誰のどんな課題を解決するか", 10, 200).optional(),
   ),
-  projectStage: z.preprocess(emptyStringToUndefined, projectStageSchema.optional()),
+  projectStage: z.preprocess(
+    emptyStringToUndefined,
+    projectStageSchema.optional(),
+  ),
   helpTypes: projectHelpTypesSchema.default([]),
   helpRequest: z.preprocess(
     emptyStringToUndefined,
-    boundedTextFieldSchema("協力してほしい具体的な内容", 60, 280).optional(),
+    boundedTextFieldSchema("協力してほしい具体的な内容", 10, 280).optional(),
   ),
   highlights: projectHighlightsSchema.default([]),
   nextMilestone: z.preprocess(
     emptyStringToUndefined,
-    boundedTextFieldSchema("次のマイルストーン", 30, 160).optional(),
+    boundedTextFieldSchema("次のマイルストーン", 10, 160).optional(),
   ),
   feedbackRequest: z.preprocess(
     emptyStringToUndefined,
-    boundedTextFieldSchema("見てほしい点 / フィードバックが欲しい点", 20, 160).optional(),
+    boundedTextFieldSchema(
+      "見てほしい点 / フィードバックが欲しい点",
+      10,
+      160,
+    ).optional(),
   ),
   backgroundNote: optionalTextFieldSchema("補足・背景", 10000),
   publicUrl: optionalUrlFieldSchema,
@@ -274,7 +288,9 @@ export const createTimelinePostInputSchema = z
       });
     }
   });
-export type CreateTimelinePostInput = z.infer<typeof createTimelinePostInputSchema>;
+export type CreateTimelinePostInput = z.infer<
+  typeof createTimelinePostInputSchema
+>;
 
 export const createCommentInputSchema = z.object({
   targetType: commentTargetTypeSchema,
@@ -310,7 +326,9 @@ export const createSupportLinkInputSchema = z.object({
   kind: textFieldSchema("支援リンク種別", 40),
   url: urlFieldSchema,
 });
-export type CreateSupportLinkInput = z.infer<typeof createSupportLinkInputSchema>;
+export type CreateSupportLinkInput = z.infer<
+  typeof createSupportLinkInputSchema
+>;
 
 export const createSupportRecordInputSchema = z.object({
   projectId: entityIdSchema,
@@ -339,7 +357,9 @@ export const createJoinRequestInputSchema = z.object({
   projectId: entityIdSchema,
   message: textFieldSchema("参加申請メッセージ", 2000),
 });
-export type CreateJoinRequestInput = z.infer<typeof createJoinRequestInputSchema>;
+export type CreateJoinRequestInput = z.infer<
+  typeof createJoinRequestInputSchema
+>;
 
 export const createConversationInputSchema = z.discriminatedUnion("type", [
   z.object({
@@ -369,7 +389,8 @@ export const createEventInputSchema = z
     status: eventStatusSchema.default("draft"),
   })
   .refine(
-    (value) => new Date(value.endAt).getTime() >= new Date(value.startAt).getTime(),
+    (value) =>
+      new Date(value.endAt).getTime() >= new Date(value.startAt).getTime(),
     {
       message: "終了日時は開始日時以降にしてください。",
       path: ["endAt"],

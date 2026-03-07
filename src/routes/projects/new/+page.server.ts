@@ -23,7 +23,6 @@ export const actions: Actions = {
     const result = validateProjectFormValues(values, {
       targetStatus,
       currentStatus: "draft",
-      requireDraftRequirements: true,
     });
 
     if (!result.success) {
