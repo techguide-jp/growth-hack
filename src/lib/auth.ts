@@ -10,7 +10,7 @@ import {
   provisionUserSettings,
 } from "$lib/server/account-settings";
 
-const authBaseUrl = env.BETTER_AUTH_URL || "http://localhost:4180";
+const authBaseUrl = env.BETTER_AUTH_URL?.trim() || undefined;
 const authSecret =
   env.BETTER_AUTH_SECRET || "development-only-secret-development-only-secret";
 const adminEmails = parseAdminEmails(env.ADMIN_EMAILS);
@@ -31,6 +31,9 @@ export const auth = betterAuth({
   secret: authSecret,
   baseURL: authBaseUrl,
   basePath: "/api/auth",
+  advanced: {
+    trustedProxyHeaders: true,
+  },
   trustedOrigins: (request) => {
     const requestOrigin = getRequestOrigin(request);
 
