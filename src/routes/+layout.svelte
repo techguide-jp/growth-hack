@@ -1,8 +1,9 @@
 <script lang="ts">
 	import "../app.css";
 	import { goto, invalidateAll } from "$app/navigation";
-	import { page } from "$app/stores";
+	import { page } from "$app/state";
 	import { authClient } from "$lib/auth-client";
+	import type { LayoutProps } from "./$types";
 	import {
 		clearSessionState,
 		setSessionState,
@@ -26,18 +27,12 @@
 	import type { NotificationSettingsPayload, UserPreferencesState } from "$lib/shared/settings";
 	import type { SessionInfo, SessionUser } from "$lib/shared/session";
 
-	export let data: {
-		me: SessionUser | null;
-		session: SessionInfo | null;
-		isOnboarded: boolean;
-		preferences: UserPreferencesState | null;
-		notificationSettings: NotificationSettingsPayload | null;
-	};
+  let { data, children }: LayoutProps = $props();
 
-  let isMenuOpen = false;
-	let isSigningOut = false;
+  let isMenuOpen = $state(false);
+	let isSigningOut = $state(false);
 
-	$: {
+	$effect(() => {
 		if (data.me) {
 			setSessionState({
 				user: data.me,
@@ -49,9 +44,9 @@
 		} else {
 			clearSessionState();
 		}
-	}
-  $: activePath = $page.url.pathname;
-  $: user = $currentUser;
+	});
+  let activePath = $derived(page.url.pathname);
+  let user = $derived($currentUser);
 
   const navItems = [
     { label: 'ホーム', href: '/', icon: Home },
@@ -110,7 +105,7 @@
                 href={item.href}
                 class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium {activePath === item.href ? 'border-indigo-500 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
               >
-                <svelte:component this={item.icon} class="w-4 h-4 mr-2" />
+                <item.icon class="w-4 h-4 mr-2" />
                 {item.label}
               </a>
             {/each}
@@ -142,7 +137,7 @@
                 class="ml-2 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-60"
                 type="button"
                 disabled={isSigningOut}
-                on:click={handleSignOut}
+                onclick={handleSignOut}
               >
                   ログアウト
               </button>
@@ -157,7 +152,7 @@
           <button 
             type="button" 
             class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-            on:click={() => isMenuOpen = !isMenuOpen}
+            onclick={() => isMenuOpen = !isMenuOpen}
           >
             <Menu class="w-6 h-6" />
           </button>
@@ -173,10 +168,10 @@
             <a 
               href={item.href}
               class="block pl-3 pr-4 py-2 border-l-4 text-base font-medium {activePath === item.href ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'}"
-              on:click={() => isMenuOpen = false}
+              onclick={() => isMenuOpen = false}
             >
               <div class="flex items-center">
-                <svelte:component this={item.icon} class="w-5 h-5 mr-3" />
+                <item.icon class="w-5 h-5 mr-3" />
                 {item.label}
               </div>
             </a>
@@ -211,7 +206,7 @@
                 type="button"
                 class="w-full text-left text-sm text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 p-2 border border-gray-200 rounded"
                 disabled={isSigningOut}
-                on:click={handleSignOut}
+                onclick={handleSignOut}
               >
                 ログアウト
               </button>
@@ -228,7 +223,7 @@
 
   <!-- Main Content -->
   <main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <slot />
+    {@render children()}
   </main>
 
   <!-- Simple Footer -->

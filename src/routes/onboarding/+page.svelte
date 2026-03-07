@@ -1,25 +1,12 @@
 <script lang="ts">
     import type { UserPreferencesState } from "$lib/shared/settings";
     import { Rocket, Heart, Users, Calendar } from "lucide-svelte";
+    import type { PageProps } from "./$types";
 
-    export let data: {
-        next: string;
-        preferences: UserPreferencesState;
-    };
+    let { data, form }: PageProps = $props();
 
-    export let form:
-        | {
-              message?: string;
-              values?: {
-                  focusModes?: string[];
-              };
-          }
-        | undefined;
-
-    let selectedModes = [
-        ...(form?.values?.focusModes ?? data.preferences.focusModes),
-    ];
-    $: serializedModes = JSON.stringify(selectedModes);
+    let selectedModes = $state<string[]>((() => [...data.preferences.focusModes])());
+    let serializedModes = $derived(JSON.stringify(selectedModes));
 
     const MODES = [
         {
@@ -55,6 +42,10 @@
             selectedModes = [...selectedModes, id];
         }
     }
+
+    $effect(() => {
+        selectedModes = [...(form?.values?.focusModes ?? data.preferences.focusModes)];
+    });
 </script>
 
 <div class="min-h-[80vh] flex flex-col items-center justify-center p-4">
@@ -78,11 +69,10 @@
                 )
                     ? 'border-indigo-600 bg-indigo-50/50'
                     : 'border-gray-200 bg-white hover:border-indigo-300'}"
-                on:click={() => toggle(mode.id)}
+                onclick={() => toggle(mode.id)}
             >
                 <div class="bg-white p-3 rounded-full shadow-sm mb-4">
-                    <svelte:component
-                        this={mode.icon}
+                    <mode.icon
                         class="w-8 h-8 {selectedModes.includes(mode.id)
                             ? 'text-indigo-600'
                             : 'text-gray-400'}"

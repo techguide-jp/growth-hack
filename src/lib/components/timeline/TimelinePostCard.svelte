@@ -9,11 +9,21 @@
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
 
-    export let post: TimelinePostView;
-    export let compact = false;
-    export let showDetailLink = true;
-    export let showAllComments = false;
-    export let invalidateKey: string | null = TIMELINE_INVALIDATION_KEY;
+    interface Props {
+        post: TimelinePostView;
+        compact?: boolean;
+        showDetailLink?: boolean;
+        showAllComments?: boolean;
+        invalidateKey?: string | null;
+    }
+
+    let {
+        post,
+        compact = false,
+        showDetailLink = true,
+        showAllComments = false,
+        invalidateKey = TIMELINE_INVALIDATION_KEY
+    }: Props = $props();
 
     const POST_TYPE_LABEL: Record<TimelinePostView["type"], string> = {
         progress: "進捗",
@@ -32,10 +42,10 @@
         }
     }
 
-    $: isQuestion = post.type === "question";
-    $: isSolved = isQuestion && post.status === "solved";
-    $: detailHref = `/timeline/${post.id}`;
-    $: commentViews = showAllComments ? post.comments : post.commentsPreview;
+    let isQuestion = $derived(post.type === "question");
+    let isSolved = $derived(isQuestion && post.status === "solved");
+    let detailHref = $derived(`/timeline/${post.id}`);
+    let commentViews = $derived(showAllComments ? post.comments : post.commentsPreview);
 </script>
 
 <div

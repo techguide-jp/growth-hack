@@ -1,21 +1,34 @@
 <script lang="ts">
     import { X } from "lucide-svelte";
 
-    export let id = "tags";
-    export let name = "tags";
-    export let value = "";
-    export let placeholder = "タグを入力して Enter で追加";
-    export let helperText =
-        "入力して Enter で追加。不要な項目はチップ右の × で削除できます。";
-    export let emptyStateLabel = "項目を追加";
-    export let maxItems = 20;
-    export let invalid = false;
-    export let describedBy: string | undefined = undefined;
+    interface Props {
+        id?: string;
+        name?: string;
+        value?: string;
+        placeholder?: string;
+        helperText?: string;
+        emptyStateLabel?: string;
+        maxItems?: number;
+        invalid?: boolean;
+        describedBy?: string | undefined;
+    }
 
-    let tagInput = "";
-    let isComposing = false;
-    let lastValue = value;
-    let tags = parseTags(value);
+    let {
+        id = "tags",
+        name = "tags",
+        value = $bindable(""),
+        placeholder = "タグを入力して Enter で追加",
+        helperText = "入力して Enter で追加。不要な項目はチップ右の × で削除できます。",
+        emptyStateLabel = "項目を追加",
+        maxItems = 20,
+        invalid = false,
+        describedBy = undefined
+    }: Props = $props();
+
+    let tagInput = $state("");
+    let isComposing = $state(false);
+    let lastValue = $state((() => value)());
+    let tags = $state((() => parseTags(value))());
 
     function parseTags(raw: string) {
         const seen = new Set<string>();
@@ -87,11 +100,15 @@
         addTags(tagInput);
     }
 
-    $: if (value !== lastValue) {
-        syncFromProps(value);
-    }
+    $effect(() => {
+        if (value !== lastValue) {
+            syncFromProps(value);
+        }
+    });
 
-    $: value = tags.join(",");
+    $effect(() => {
+        value = tags.join(",");
+    });
 </script>
 
 <div class="space-y-2">
@@ -109,7 +126,7 @@
                     type="button"
                     class="rounded-full text-indigo-500 hover:text-indigo-700"
                     aria-label={`${tag} を削除`}
-                    on:click={() => removeTag(tag)}
+                    onclick={() => removeTag(tag)}
                 >
                     <X class="h-3.5 w-3.5" />
                 </button>
@@ -125,10 +142,10 @@
             disabled={tags.length >= maxItems}
             aria-invalid={invalid}
             aria-describedby={describedBy}
-            on:keydown={handleKeydown}
-            on:blur={handleBlur}
-            on:compositionstart={() => (isComposing = true)}
-            on:compositionend={() => (isComposing = false)}
+            onkeydown={handleKeydown}
+            onblur={handleBlur}
+            oncompositionstart={() => (isComposing = true)}
+            oncompositionend={() => (isComposing = false)}
         />
     </div>
 

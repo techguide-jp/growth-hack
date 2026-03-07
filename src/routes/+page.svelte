@@ -1,7 +1,8 @@
 <script lang="ts">
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
     import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import type { PageProps } from "./$types";
     import type {
         ProjectHelpType,
         ProjectStage,
@@ -10,38 +11,12 @@
     import type { TimelinePostView } from "$lib/shared/timeline";
     import { Rocket, Search } from "lucide-svelte";
 
-    export let data: {
-        recentPosts: TimelinePostView[];
-        recentProjects: Array<{
-            id: string;
-            ownerId: string;
-            ownerName: string | null;
-            ownerAvatarUrl: string | null;
-            title: string;
-            oneLiner: string;
-            problemStatement: string;
-            projectStage: ProjectStage | null;
-            helpTypes: ProjectHelpType[];
-            helpRequest: string;
-            highlights: string[];
-            nextMilestone: string;
-            feedbackRequest: string;
-            backgroundNote: string;
-            publicUrl?: string;
-            repoUrl?: string;
-            demoUrl?: string;
-            tags: string[];
-            images: string[];
-            status: ProjectStatus;
-            createdAt: string;
-            updatedAt: string;
-        }>;
-    };
+    let { data }: PageProps = $props();
 
     const defaultFocusModes = ["post", "support", "collab", "event"];
 
-    $: focusModes = $page.data.preferences?.focusModes ?? defaultFocusModes;
-    $: hasPreferences = Boolean($page.data.preferences);
+    let focusModes = $derived(page.data.preferences?.focusModes ?? defaultFocusModes);
+    let hasPreferences = $derived(Boolean(page.data.preferences));
 </script>
 
 <div class="space-y-12">

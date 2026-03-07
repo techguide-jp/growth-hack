@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { PageProps } from "./$types";
     import type {
         ProjectHelpType,
         ProjectStage,
@@ -24,41 +25,7 @@
         showcase: "見せびらかし",
     };
 
-    export let data: {
-        profile: {
-            id: string;
-            email: string | null;
-            name: string;
-            avatarUrl: string | null;
-        } | null;
-        userProjects: Array<{
-            id: string;
-            ownerId: string;
-            ownerName: string | null;
-            ownerAvatarUrl: string | null;
-            title: string;
-            oneLiner: string;
-            problemStatement: string;
-            projectStage: ProjectStage | null;
-            helpTypes: ProjectHelpType[];
-            helpRequest: string;
-            highlights: string[];
-            nextMilestone: string;
-            feedbackRequest: string;
-            backgroundNote: string;
-            publicUrl?: string;
-            repoUrl?: string;
-            demoUrl?: string;
-            tags: string[];
-            images: string[];
-            status: ProjectStatus;
-            createdAt: string;
-            updatedAt: string;
-        }>;
-        recentPosts: TimelinePostView[];
-        focusModes: FocusMode[];
-        totalConfirmedSupport: number;
-    };
+    let { data }: PageProps = $props();
 </script>
 
 {#if data.profile}

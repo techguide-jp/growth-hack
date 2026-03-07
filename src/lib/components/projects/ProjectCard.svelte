@@ -26,22 +26,26 @@
         ownerAvatarUrl?: string | null;
     };
 
-    export let project: ProjectCardProject;
+    interface Props {
+        project: ProjectCardProject;
+    }
 
-    $: owner = {
+    let { project }: Props = $props();
+
+    let owner = $derived({
         name: project.ownerName ?? "Unknown",
         avatarUrl:
             project.ownerAvatarUrl ??
             `https://i.pravatar.cc/150?u=${encodeURIComponent(project.ownerId)}`,
-    };
-    $: statusInfo = getProjectStatusInfo(project.status);
-    $: stageInfo = getProjectStageInfo(project.projectStage ?? null);
-    $: oneLiner = project.oneLiner ?? project.summary ?? "";
-    $: helpTypes = (project.helpTypes ?? []).map((item) => ({
+    });
+    let statusInfo = $derived(getProjectStatusInfo(project.status));
+    let stageInfo = $derived(getProjectStageInfo(project.projectStage ?? null));
+    let oneLiner = $derived(project.oneLiner ?? project.summary ?? "");
+    let helpTypes = $derived((project.helpTypes ?? []).map((item) => ({
         value: item,
         ...getProjectHelpTypeInfo(item),
-    }));
-    $: helpRequestPreview = project.helpRequest?.split("\n")[0] ?? "";
+    })));
+    let helpRequestPreview = $derived(project.helpRequest?.split("\n")[0] ?? "");
 </script>
 
 <a

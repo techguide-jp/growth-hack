@@ -1,6 +1,6 @@
 <script lang="ts">
     import { invalidate } from "$app/navigation";
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import { sessionUser } from "$lib/stores/session";
     import type { CommentTargetType } from "$lib/shared/domain";
     import type { TimelineCommentView } from "$lib/shared/timeline";
@@ -9,28 +9,42 @@
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
 
-    export let targetId: string;
-    export let targetType: CommentTargetType;
-    export let comments: TimelineCommentView[] = [];
-    export let commentCount = 0;
-    export let canSolve = false;
-    export let acceptedCommentId: string | null = null;
-    export let defaultShowAll = false;
-    export let hasFullComments = false;
-    export let invalidateKey: string | null = null;
+    interface Props {
+        targetId: string;
+        targetType: CommentTargetType;
+        comments?: TimelineCommentView[];
+        commentCount?: number;
+        canSolve?: boolean;
+        acceptedCommentId?: string | null;
+        defaultShowAll?: boolean;
+        hasFullComments?: boolean;
+        invalidateKey?: string | null;
+    }
 
-    let newCommentBody = "";
-    let showAll = defaultShowAll;
-    let hasLoadedAllComments = hasFullComments;
-    let localCanSolve = canSolve;
-    let localAcceptedCommentId = acceptedCommentId;
-    let currentComments = comments.map((comment) => ({ ...comment }));
-    let currentCommentCount = commentCount;
-    let isSubmitting = false;
-    let isLoadingAll = false;
-    let isSolving = false;
-    let errorMessage = "";
-    let lastCommentsSignature = "";
+    let {
+        targetId,
+        targetType,
+        comments = [],
+        commentCount = 0,
+        canSolve = false,
+        acceptedCommentId = null,
+        defaultShowAll = false,
+        hasFullComments = false,
+        invalidateKey = null
+    }: Props = $props();
+
+    let newCommentBody = $state("");
+    let showAll = $state((() => defaultShowAll)());
+    let hasLoadedAllComments = $state((() => hasFullComments)());
+    let localCanSolve = $state((() => canSolve)());
+    let localAcceptedCommentId = $state((() => acceptedCommentId)());
+    let currentComments = $state((() => comments.map((comment) => ({ ...comment })))());
+    let currentCommentCount = $state((() => commentCount)());
+    let isSubmitting = $state(false);
+    let isLoadingAll = $state(false);
+    let isSolving = $state(false);
+    let errorMessage = $state("");
+    let lastCommentsSignature = $state("");
 
     function syncAcceptedComment(
         value: TimelineCommentView[],
@@ -74,7 +88,7 @@
             .join("|");
     }
 
-    $: {
+    $effect(() => {
         const nextSignature = [
             commentCount,
             acceptedCommentId ?? "",
@@ -111,15 +125,15 @@
 
             lastCommentsSignature = nextSignature;
         }
-    }
+    });
 
-    $: visibleComments = showAll
+    let visibleComments = $derived(showAll
         ? currentComments
-        : currentComments.slice(-3);
-    $: hasMore = currentCommentCount > currentComments.length;
-    $: loginHref = `/login?next=${encodeURIComponent(
-        `${$page.url.pathname}${$page.url.search}`,
-    )}`;
+        : currentComments.slice(-3));
+    let hasMore = $derived(currentCommentCount > currentComments.length);
+    let loginHref = $derived(`/login?next=${encodeURIComponent(
+        `${page.url.pathname}${page.url.search}`,
+    )}`);
 
     async function fetchAllComments() {
         const response = await fetch(
@@ -279,7 +293,7 @@
         <button
             class="text-xs text-gray-500 hover:text-indigo-600 mb-2 disabled:opacity-60"
             disabled={isLoadingAll}
-            on:click={handleShowAll}
+            onclick={handleShowAll}
         >
             {#if isLoadingAll}
                 コメントを読み込み中...
@@ -330,7 +344,7 @@
                         <button
                             class="mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center text-gray-400 hover:text-green-600 disabled:opacity-60"
                             disabled={isSolving}
-                            on:click={() => handleSolve(comment.id)}
+                            onclick={() => handleSolve(comment.id)}
                         >
                             <Check class="w-3 h-3 mr-1" /> これで解決にする
                         </button>
@@ -347,12 +361,17 @@
                 bind:value={newCommentBody}
                 placeholder="コメントを書く..."
                 class="w-full text-sm rounded-full border-gray-300 pl-4 pr-10 py-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 hover:bg-white transition-colors"
-                on:keydown={(event) => event.key === "Enter" && handleAdd()}
+                        onkeydown={(event) => {
+                            if (event.key === "Enter" && !event.isComposing) {
+                                event.preventDefault();
+                                void handleAdd();
+                            }
+                        }}
             />
             <button
                 class="absolute right-2 top-1.5 text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
                 disabled={!newCommentBody.trim() || isSubmitting}
-                on:click={handleAdd}
+                onclick={handleAdd}
             >
                 <Send class="w-4 h-4" />
             </button>

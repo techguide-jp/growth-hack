@@ -31,7 +31,7 @@
         type ProjectFormErrorField,
         type ProjectFormSubmissionState,
     } from "$lib/shared/project-form";
-    import { onDestroy, onMount, tick } from "svelte";
+    import { tick } from "svelte";
 
     type MediaUploadContext = {
         driver: MediaStorageDriver;
@@ -77,15 +77,42 @@
         status: ProjectStatus;
     };
 
-    export let mode: "create" | "edit";
-    export let form: ProjectFormSubmissionState | undefined;
-    export let project: EditorProject | undefined = undefined;
-    export let uploadContext: MediaUploadContext;
+    interface Props {
+        mode: "create" | "edit";
+        form: ProjectFormSubmissionState | undefined;
+        project?: EditorProject | undefined;
+        uploadContext: MediaUploadContext;
+    }
+
+    let {
+        mode,
+        form,
+        project = undefined,
+        uploadContext
+    }: Props = $props();
 
     const stageOptions = Object.entries(PROJECT_STAGE_MAP).map(([value, info]) => ({
         value: value as ProjectStage,
         ...info,
     }));
+    const EMPTY_PROJECT: EditorProject = {
+        title: "",
+        oneLiner: "",
+        problemStatement: "",
+        projectStage: null,
+        helpTypes: [],
+        helpRequest: "",
+        highlights: [],
+        nextMilestone: "",
+        feedbackRequest: "",
+        backgroundNote: "",
+        publicUrl: "",
+        repoUrl: "",
+        demoUrl: "",
+        tags: [],
+        images: [],
+        status: "draft",
+    };
 
     function parseDelimitedValues(raw: string) {
         return raw
@@ -175,72 +202,88 @@
         );
     }
 
-    const initialProject = project ?? {
-        title: "",
-        oneLiner: "",
-        problemStatement: "",
-        projectStage: null,
-        helpTypes: [],
-        helpRequest: "",
-        highlights: [],
-        nextMilestone: "",
-        feedbackRequest: "",
-        backgroundNote: "",
-        publicUrl: "",
-        repoUrl: "",
-        demoUrl: "",
-        tags: [],
-        images: [],
-        status: "draft" as ProjectStatus,
-    };
+    let initialProject = $derived(project ?? EMPTY_PROJECT);
 
-    let title = form?.values?.title ?? initialProject.title;
-    let oneLiner = form?.values?.oneLiner ?? initialProject.oneLiner;
-    let problemStatement =
-        form?.values?.problemStatement ?? initialProject.problemStatement;
-    let projectStage =
-        (form?.values?.projectStage as ProjectStage | "") ??
-        initialProject.projectStage ??
-        "";
-    let helpTypes = parseDelimitedValues(
-        form?.values?.helpTypes ?? initialProject.helpTypes.join(","),
-    ) as ProjectHelpType[];
-    let helpRequest = form?.values?.helpRequest ?? initialProject.helpRequest;
-    let highlightsValue =
-        form?.values?.highlights ?? initialProject.highlights.join(",");
-    let nextMilestone =
-        form?.values?.nextMilestone ?? initialProject.nextMilestone;
-    let feedbackRequest =
-        form?.values?.feedbackRequest ?? initialProject.feedbackRequest;
-    let backgroundNote =
-        form?.values?.backgroundNote ?? initialProject.backgroundNote;
-    let publicUrl = form?.values?.publicUrl ?? initialProject.publicUrl ?? "";
-    let repoUrl = form?.values?.repoUrl ?? initialProject.repoUrl ?? "";
-    let demoUrl = form?.values?.demoUrl ?? initialProject.demoUrl ?? "";
-    let tagsValue = form?.values?.tags ?? initialProject.tags.join(",");
-    let keptImages =
-        parseJsonStringArray(form?.values?.keptImagesJson) ?? initialProject.images;
-    let uploadedImages: UploadedImage[] = toUploadedImages(
-        parseJsonStringArray(form?.values?.uploadedImagesJson) ?? [],
+    function getInitialEditorState() {
+        return {
+            title: form?.values?.title ?? initialProject.title,
+            oneLiner: form?.values?.oneLiner ?? initialProject.oneLiner,
+            problemStatement:
+                form?.values?.problemStatement ?? initialProject.problemStatement,
+            projectStage:
+                (form?.values?.projectStage as ProjectStage | "") ??
+                initialProject.projectStage ??
+                "",
+            helpTypes: parseDelimitedValues(
+                form?.values?.helpTypes ?? initialProject.helpTypes.join(","),
+            ) as ProjectHelpType[],
+            helpRequest: form?.values?.helpRequest ?? initialProject.helpRequest,
+            highlightsValue:
+                form?.values?.highlights ?? initialProject.highlights.join(","),
+            nextMilestone:
+                form?.values?.nextMilestone ?? initialProject.nextMilestone,
+            feedbackRequest:
+                form?.values?.feedbackRequest ?? initialProject.feedbackRequest,
+            backgroundNote:
+                form?.values?.backgroundNote ?? initialProject.backgroundNote,
+            publicUrl: form?.values?.publicUrl ?? initialProject.publicUrl ?? "",
+            repoUrl: form?.values?.repoUrl ?? initialProject.repoUrl ?? "",
+            demoUrl: form?.values?.demoUrl ?? initialProject.demoUrl ?? "",
+            tagsValue: form?.values?.tags ?? initialProject.tags.join(","),
+            keptImages:
+                parseJsonStringArray(form?.values?.keptImagesJson) ?? initialProject.images,
+            uploadedImages: toUploadedImages(
+                parseJsonStringArray(form?.values?.uploadedImagesJson) ?? [],
+            ),
+            lastSyncedFormValues: form?.values,
+            submittedStatusIntent:
+                form?.values?.statusIntent ?? (mode === "create" ? "draft" : "keep"),
+        };
+    }
+
+    const initialEditorState = getInitialEditorState();
+
+    let title = $state(initialEditorState.title);
+    let oneLiner = $state(initialEditorState.oneLiner);
+    let problemStatement = $state(initialEditorState.problemStatement);
+    let projectStage = $state(initialEditorState.projectStage);
+    let helpTypes = $state(initialEditorState.helpTypes);
+    let helpRequest = $state(initialEditorState.helpRequest);
+    let highlightsValue = $state(initialEditorState.highlightsValue);
+    let nextMilestone = $state(initialEditorState.nextMilestone);
+    let feedbackRequest = $state(initialEditorState.feedbackRequest);
+    let backgroundNote = $state(initialEditorState.backgroundNote);
+    let publicUrl = $state(initialEditorState.publicUrl);
+    let repoUrl = $state(initialEditorState.repoUrl);
+    let demoUrl = $state(initialEditorState.demoUrl);
+    let tagsValue = $state(initialEditorState.tagsValue);
+    let keptImages = $state(initialEditorState.keptImages);
+    let uploadedImages: UploadedImage[] = $state(initialEditorState.uploadedImages);
+    let localPreparedImages: LocalPreparedImage[] = $state([]);
+    let draftProjectId = $derived(form?.values?.draftProjectId ?? uploadContext.projectId);
+    let projectStageField: HTMLDivElement | undefined;
+    let helpTypesField: HTMLDivElement | undefined;
+    let screenshotInput: HTMLInputElement | undefined;
+    let isSubmitting = $state(false);
+    let isPreparingScreenshots = $state(false);
+    let imageMessage = $state("");
+    let uploadedImageUrls = $derived(
+        uploadedImages
+            .filter((image) => image.status === "uploaded")
+            .map((image) => image.url),
     );
-    let localPreparedImages: LocalPreparedImage[] = [];
-    let draftProjectId = form?.values?.draftProjectId ?? uploadContext.projectId;
-    let projectStageField: HTMLDivElement | undefined = undefined;
-    let helpTypesField: HTMLDivElement | undefined = undefined;
-    let screenshotInput: HTMLInputElement | undefined = undefined;
-    let isSubmitting = false;
-    let isPreparingScreenshots = false;
-    let imageMessage = "";
-    let uploadedImageUrls: string[] = [];
-    let pendingUploadCount = 0;
-    let localPendingFiles: File[] = [];
-    let shouldDisableScreenshotActions = false;
+    let pendingUploadCount = $derived(
+        uploadedImages.filter((image) => image.status === "uploading").length,
+    );
+    let localPendingFiles = $derived(localPreparedImages.map((image) => image.file));
+    let shouldDisableScreenshotActions = $derived(
+        isPreparingScreenshots || pendingUploadCount > 0,
+    );
     let hasScheduledLeaveCleanup = false;
     let currentUploadAbortController: AbortController | null = null;
-    let lastSyncedFormValues = form?.values;
-    let submittedStatusIntent =
-        form?.values?.statusIntent ?? (mode === "create" ? "draft" : "keep");
-    let statusIntentInput: HTMLInputElement | undefined = undefined;
+    let lastSyncedFormValues = initialEditorState.lastSyncedFormValues;
+    let submittedStatusIntent = $state(initialEditorState.submittedStatusIntent);
+    let statusIntentInput: HTMLInputElement | undefined;
     let lastFocusedErrorKey = "";
     const screenshotSizeLimitInMb = Math.floor(
         PROJECT_SCREENSHOT_MAX_SIZE_BYTES / 1024 / 1024,
@@ -582,51 +625,46 @@
         }
     }
 
-    $: selectedStageInfo = getProjectStageInfo(
+    let selectedStageInfo = $derived(getProjectStageInfo(
         projectStage ? (projectStage as ProjectStage) : null,
-    );
-    $: highlights = parseDelimitedValues(highlightsValue);
-    $: tags = parseDelimitedValues(tagsValue);
-    $: uploadedImageUrls = uploadedImages
-        .filter((image) => image.status === "uploaded")
-        .map((image) => image.url);
-    $: pendingUploadCount = uploadedImages.filter((image) => image.status === "uploading").length;
-    $: localPendingFiles = localPreparedImages.map((image) => image.file);
-    $: shouldDisableScreenshotActions = isPreparingScreenshots || pendingUploadCount > 0;
-    $: draftProjectId = form?.values?.draftProjectId ?? uploadContext.projectId;
-    $: hasFieldLevelErrors = hasProjectFormErrors(form?.errors);
-    $: if (form?.values && form.values !== lastSyncedFormValues) {
-        lastSyncedFormValues = form.values;
+    ));
+    let highlights = $derived(parseDelimitedValues(highlightsValue));
+    let tags = $derived(parseDelimitedValues(tagsValue));
+    let hasFieldLevelErrors = $derived(hasProjectFormErrors(form?.errors));
+    $effect(() => {
+        if (form?.values && form.values !== lastSyncedFormValues) {
+            lastSyncedFormValues = form.values;
 
-        if (form.values.statusIntent) {
-            setSubmittedStatusIntent(form.values.statusIntent);
-        }
-
-        const nextKeptImages = parseJsonStringArray(form.values.keptImagesJson);
-
-        if (nextKeptImages && !hasSameItems(keptImages, nextKeptImages)) {
-            keptImages = nextKeptImages;
-        }
-
-        const nextUploadedImageUrls = parseJsonStringArray(
-            form.values.uploadedImagesJson,
-        );
-        const currentUploadedImageUrls = uploadedImages
-            .filter((image) => image.status === "uploaded")
-            .map((image) => image.url);
-
-        if (
-            nextUploadedImageUrls &&
-            !hasSameItems(currentUploadedImageUrls, nextUploadedImageUrls)
-        ) {
-            for (const image of uploadedImages) {
-                releaseUploadedImagePreview(image);
+            if (form.values.statusIntent) {
+                setSubmittedStatusIntent(form.values.statusIntent);
             }
 
-            uploadedImages = toUploadedImages(nextUploadedImageUrls);
+            const nextKeptImages = parseJsonStringArray(form.values.keptImagesJson);
+
+            if (nextKeptImages && !hasSameItems(keptImages, nextKeptImages)) {
+                keptImages = nextKeptImages;
+            }
+
+            const nextUploadedImageUrls = parseJsonStringArray(
+                form.values.uploadedImagesJson,
+            );
+            const currentUploadedImageUrls = uploadedImages
+                .filter((image) => image.status === "uploaded")
+                .map((image) => image.url);
+
+            if (
+                nextUploadedImageUrls &&
+                !hasSameItems(currentUploadedImageUrls, nextUploadedImageUrls)
+            ) {
+                for (const image of uploadedImages) {
+                    releaseUploadedImagePreview(image);
+                }
+
+                uploadedImages = toUploadedImages(nextUploadedImageUrls);
+            }
         }
-    }
-    $: publishChecklist = getProjectPublishChecklist({
+    });
+    let publishChecklist = $derived(getProjectPublishChecklist({
         highlights,
         nextMilestone,
         feedbackRequest,
@@ -639,29 +677,33 @@
             ...uploadedImageUrls,
             ...localPendingFiles.map((file) => file.name),
         ],
-    });
-    $: publishReady = publishChecklist.every((item) => item.complete);
-    $: keepButtonLabel = getKeepButtonLabel(initialProject.status);
-    $: showLegacyPublishedNotice =
-        mode === "edit" &&
+    }));
+    let publishReady = $derived(publishChecklist.every((item) => item.complete));
+    let keepButtonLabel = $derived(getKeepButtonLabel(initialProject.status));
+    let showLegacyPublishedNotice =
+        $derived(mode === "edit" &&
         initialProject.status === "published" &&
-        !publishReady;
-    $: if (browser && form?.firstErrorField) {
-        const nextErrorKey = JSON.stringify({
-            firstErrorField: form.firstErrorField,
-            errors: form.errors,
-        });
+        !publishReady);
+    $effect(() => {
+        if (browser && form?.firstErrorField) {
+            const nextErrorKey = JSON.stringify({
+                firstErrorField: form.firstErrorField,
+                errors: form.errors,
+            });
 
-        if (nextErrorKey !== lastFocusedErrorKey) {
-            lastFocusedErrorKey = nextErrorKey;
-            void focusFirstErrorField(form.firstErrorField);
+            if (nextErrorKey !== lastFocusedErrorKey) {
+                lastFocusedErrorKey = nextErrorKey;
+                void focusFirstErrorField(form.firstErrorField);
+            }
         }
-    }
-    $: if (browser) {
-        syncScreenshotInputFiles();
-    }
+    });
+    $effect(() => {
+        if (browser) {
+            syncScreenshotInputFiles();
+        }
+    });
 
-    onMount(() => {
+    $effect(() => {
         if (!browser) {
             return;
         }
@@ -681,13 +723,15 @@
         };
     });
 
-    onDestroy(() => {
-        scheduleLeaveCleanup();
-        releaseLocalPreparedImages(localPreparedImages);
+    $effect(() => {
+        return () => {
+            scheduleLeaveCleanup();
+            releaseLocalPreparedImages(localPreparedImages);
 
-        for (const image of uploadedImages) {
-            releaseUploadedImagePreview(image);
-        }
+            for (const image of uploadedImages) {
+                releaseUploadedImagePreview(image);
+            }
+        };
     });
 </script>
 
@@ -696,7 +740,7 @@
     enctype="multipart/form-data"
     novalidate
     class="space-y-8"
-    on:submit={handleSubmit}
+    onsubmit={handleSubmit}
 >
     <section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <div class="mb-6">
@@ -811,7 +855,7 @@
                                 ? 'border-indigo-500 bg-indigo-50 shadow-sm'
                                 : 'border-gray-200 bg-white hover:border-gray-300'}"
                             aria-pressed={projectStage === option.value}
-                            on:click={() => (projectStage = option.value)}
+                            onclick={() => (projectStage = option.value)}
                         >
                             <div class="font-bold text-gray-900">{option.label}</div>
                             <p class="mt-2 text-sm text-gray-600">{option.description}</p>
@@ -1129,7 +1173,7 @@
                             type="button"
                             disabled={shouldDisableScreenshotActions}
                             class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
-                            on:click={clearPendingScreenshots}
+                            onclick={clearPendingScreenshots}
                         >
                             今回追加分をクリア
                         </button>
@@ -1151,7 +1195,7 @@
                     class="block w-full rounded-lg border border-dashed bg-gray-50 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-700 {hasFieldErrors('screenshots')
                         ? 'border-rose-300'
                         : 'border-gray-300'}"
-                    on:change={handleScreenshotSelection}
+                    onchange={handleScreenshotSelection}
                 />
                 <ProjectFieldErrors
                     id={getFieldErrorId("screenshots")}
@@ -1202,7 +1246,7 @@
                                         <button
                                             type="button"
                                             class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
-                                            on:click={() => removeKeptImage(imageUrl)}
+                                            onclick={() => removeKeptImage(imageUrl)}
                                         >
                                             削除
                                         </button>
@@ -1240,7 +1284,7 @@
                                                 <button
                                                     type="button"
                                                     class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
-                                                    on:click={() => removeUploadedImage(image.id)}
+                                                    onclick={() => removeUploadedImage(image.id)}
                                                 >
                                                     削除
                                                 </button>
@@ -1282,7 +1326,7 @@
                                         <button
                                             type="button"
                                             class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
-                                            on:click={() => removeLocalPreparedImage(image.id)}
+                                            onclick={() => removeLocalPreparedImage(image.id)}
                                         >
                                             削除
                                         </button>

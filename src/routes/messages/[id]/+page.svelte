@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import {
         conversations,
         messages,
@@ -10,20 +10,20 @@
     } from "$lib/stores/mock";
     import { ArrowLeft, Send, Users, UserRound } from "lucide-svelte";
 
-    let newMessage = "";
+    let newMessage = $state("");
 
-    $: conversationId = $page.params.id ?? "";
-    $: conversation = $conversations.find((item) => item.id === conversationId);
-    $: thread = [...$messages]
+    let conversationId = $derived(page.params.id ?? "");
+    let conversation = $derived($conversations.find((item) => item.id === conversationId));
+    let thread = $derived([...$messages]
         .filter((message) => message.conversationId === conversationId)
         .sort(
             (a, b) =>
                 new Date(a.createdAt).getTime() -
                 new Date(b.createdAt).getTime(),
-        );
-    $: members = conversation
+        ));
+    let members = $derived(conversation
         ? $users.filter((user) => conversation.memberIds.includes(user.id))
-        : [];
+        : []);
 
     function getDisplayName(senderId: string) {
         return $users.find((user) => user.id === senderId)?.name ?? "Unknown";
@@ -139,15 +139,16 @@
                         bind:value={newMessage}
                         placeholder="メッセージを入力..."
                         class="flex-1 rounded-full border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                        on:keydown={(event) => {
+                        onkeydown={(event) => {
                             if (event.key === "Enter" && !event.isComposing) {
+                                event.preventDefault();
                                 handleSend();
                             }
                         }}
                     />
                     <button
                         class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                        on:click={handleSend}
+                        onclick={handleSend}
                         disabled={!newMessage.trim()}
                         aria-label="送信"
                     >

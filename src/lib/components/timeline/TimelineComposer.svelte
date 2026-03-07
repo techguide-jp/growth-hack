@@ -1,6 +1,6 @@
 <script lang="ts">
     import { invalidate } from "$app/navigation";
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import { sessionUser } from "$lib/stores/session";
     import type { TimelinePostType } from "$lib/shared/domain";
     import { TIMELINE_INVALIDATION_KEY } from "$lib/shared/timeline";
@@ -12,20 +12,24 @@
         title: string;
     };
 
-    export let projects: TimelineComposerProject[] = [];
-    export let invalidateKey: string = TIMELINE_INVALIDATION_KEY;
+    interface Props {
+        projects?: TimelineComposerProject[];
+        invalidateKey?: string;
+    }
 
-    let type: TimelinePostType = "progress";
-    let body = "";
-    let title = "";
-    let meta = { situation: "", problem: "", tried: "", environment: "" };
-    let selectedProjectId = "";
-    let errorMessage = "";
-    let isSubmitting = false;
+    let { projects = [], invalidateKey = TIMELINE_INVALIDATION_KEY }: Props = $props();
 
-    $: loginHref = `/login?next=${encodeURIComponent(
-        `${$page.url.pathname}${$page.url.search}`,
-    )}`;
+    let type: TimelinePostType = $state("progress");
+    let body = $state("");
+    let title = $state("");
+    let meta = $state({ situation: "", problem: "", tried: "", environment: "" });
+    let selectedProjectId = $state("");
+    let errorMessage = $state("");
+    let isSubmitting = $state(false);
+
+    let loginHref = $derived(`/login?next=${encodeURIComponent(
+        `${page.url.pathname}${page.url.search}`,
+    )}`);
 
     const TYPES = [
         {
@@ -48,7 +52,9 @@
         },
     ] as const;
 
-    async function handleSubmit() {
+    async function handleSubmit(event: SubmitEvent) {
+        event.preventDefault();
+
         if (!$sessionUser || isSubmitting) {
             return;
         }
@@ -103,16 +109,16 @@
                         : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
                 )}
                 disabled={isSubmitting}
-                on:click={() => (type = t.id)}
+                onclick={() => (type = t.id)}
             >
-                <svelte:component this={t.icon} class="w-4 h-4" />
+                <t.icon class="w-4 h-4" />
                 {t.label}
             </button>
         {/each}
     </div>
 
     {#if $sessionUser}
-        <form on:submit|preventDefault={handleSubmit} class="space-y-3">
+        <form onsubmit={handleSubmit} class="space-y-3">
             {#if projects.length > 0}
                 <div>
                     <select

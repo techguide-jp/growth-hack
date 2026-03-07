@@ -1,5 +1,6 @@
 <script lang="ts">
     import ProjectEditorForm from "$lib/components/projects/ProjectEditorForm.svelte";
+    import type { PageProps } from "./$types";
     import type { MediaStorageDriver } from "$lib/shared/media/config";
     import type { ProjectFormSubmissionState } from "$lib/shared/project-form";
     import type {
@@ -9,34 +10,7 @@
     } from "$lib/shared/domain";
     import { ArrowLeft } from "lucide-svelte";
 
-    export let data: {
-        project: {
-            id: string;
-            title: string;
-            oneLiner: string;
-            problemStatement: string;
-            projectStage: ProjectStage | null;
-            helpTypes: ProjectHelpType[];
-            helpRequest: string;
-            highlights: string[];
-            nextMilestone: string;
-            feedbackRequest: string;
-            backgroundNote: string;
-            publicUrl?: string;
-            repoUrl?: string;
-            demoUrl?: string;
-            tags: string[];
-            images: string[];
-            status: ProjectStatus;
-        };
-        mediaUpload: {
-            driver: MediaStorageDriver;
-            supportsDirectUpload: boolean;
-            userId: string;
-        };
-    };
-
-    export let form: ProjectFormSubmissionState | undefined;
+    let { data, form }: PageProps = $props();
 </script>
 
 <div class="max-w-5xl mx-auto py-6">
@@ -56,7 +30,7 @@
 
     <ProjectEditorForm
         mode="edit"
-        {form}
+        form={form as ProjectFormSubmissionState | undefined}
         project={data.project}
         uploadContext={{
             ...data.mediaUpload,

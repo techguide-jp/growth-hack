@@ -11,13 +11,13 @@
         publishedAt: string;
     };
 
-    let title = "";
-    let body = "";
-    let targetType: "all" | "event" = "all";
-    let targetEventId = MOCK_EVENTS[0]?.id ?? "";
-    let error = "";
+    let title = $state("");
+    let body = $state("");
+    let targetType: "all" | "event" = $state("all");
+    let targetEventId = $state(MOCK_EVENTS[0]?.id ?? "");
+    let error = $state("");
 
-    let announcements: Announcement[] = [
+    let announcements: Announcement[] = $state([
         {
             id: "ann-1",
             title: "今週の投稿テーマ",
@@ -25,7 +25,7 @@
             targetType: "all",
             publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
         },
-    ];
+    ]);
 
     function getEventTitle(eventId?: string) {
         if (!eventId) return "全体";
@@ -154,7 +154,7 @@
             <div class="flex justify-end">
                 <button
                     class="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700"
-                    on:click={publishAnnouncement}
+                    onclick={publishAnnouncement}
                 >
                     <Send class="w-4 h-4 mr-1.5" />
                     告知を追加

@@ -3,22 +3,14 @@
     import ProjectTabs from "$lib/components/projects/ProjectTabs.svelte";
     import SupportPanel from "$lib/components/projects/SupportPanel.svelte";
     import ReactionBar from "$lib/components/shared/ReactionBar.svelte";
+    import type { PageProps } from "./$types";
     import {
         getProjectHelpTypeInfo,
         getProjectPublishChecklist,
         getProjectStatusInfo,
         getProjectStageInfo,
     } from "$lib/constants/project";
-    import type {
-        ProjectHelpType,
-        ProjectStage,
-        ProjectStatus,
-    } from "$lib/shared/domain";
-    import {
-        getProjectSuccessToastMessage,
-        type ProjectSuccessToast,
-    } from "$lib/shared/project-form";
-    import type { TimelineReactionSummary } from "$lib/shared/timeline";
+    import { getProjectSuccessToastMessage } from "$lib/shared/project-form";
     import {
         Github,
         Globe,
@@ -30,44 +22,15 @@
     } from "lucide-svelte";
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
-    import { onDestroy, onMount } from "svelte";
     import { fly } from "svelte/transition";
 
-    export let data: {
-        canEdit: boolean;
-        projectReactions: TimelineReactionSummary[];
-        successToast: ProjectSuccessToast | null;
-        project: {
-            id: string;
-            ownerId: string;
-            ownerName: string | null;
-            ownerAvatarUrl: string | null;
-            title: string;
-            oneLiner: string;
-            problemStatement: string;
-            projectStage: ProjectStage | null;
-            helpTypes: ProjectHelpType[];
-            helpRequest: string;
-            highlights: string[];
-            nextMilestone: string;
-            feedbackRequest: string;
-            backgroundNote: string;
-            publicUrl?: string;
-            repoUrl?: string;
-            demoUrl?: string;
-            tags: string[];
-            images: string[];
-            status: ProjectStatus;
-            createdAt: string;
-            updatedAt: string;
-        };
-    };
+    let { data }: PageProps = $props();
 
-    const project = data.project;
-    let activeTab = "overview";
-    let activeImageIndex = 0;
-    let toastMessage = "";
-    let showToast = false;
+    let project = $derived(data.project);
+    let activeTab = $state("overview");
+    let activeImageIndex = $state(0);
+    let toastMessage = $state("");
+    let showToast = $state(false);
     let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
     function clearToastTimer() {
@@ -98,17 +61,19 @@
         window.history.replaceState(window.history.state, "", nextUrl);
     }
 
-    $: statusInfo = getProjectStatusInfo(project.status);
-    $: stageInfo = getProjectStageInfo(project.projectStage);
-    $: helpTypeInfo = project.helpTypes.map((helpType) => ({
+    let statusInfo = $derived(getProjectStatusInfo(project.status));
+    let stageInfo = $derived(getProjectStageInfo(project.projectStage));
+    let helpTypeInfo = $derived(project.helpTypes.map((helpType) => ({
         value: helpType,
         ...getProjectHelpTypeInfo(helpType),
-    }));
-    $: heroImage = project.images[activeImageIndex] ?? null;
-    $: if (activeImageIndex >= project.images.length) {
-        activeImageIndex = 0;
-    }
-    $: publishChecklist = getProjectPublishChecklist({
+    })));
+    let heroImage = $derived(project.images[activeImageIndex] ?? null);
+    $effect(() => {
+        if (activeImageIndex >= project.images.length) {
+            activeImageIndex = 0;
+        }
+    });
+    let publishChecklist = $derived(getProjectPublishChecklist({
         highlights: project.highlights,
         nextMilestone: project.nextMilestone,
         feedbackRequest: project.feedbackRequest,
@@ -117,10 +82,10 @@
         repoUrl: project.repoUrl,
         demoUrl: project.demoUrl,
         images: project.images,
-    });
-    $: showOwnerChecklist = data.canEdit && !publishChecklist.every((item) => item.complete);
+    }));
+    let showOwnerChecklist = $derived(data.canEdit && !publishChecklist.every((item) => item.complete));
 
-    onMount(() => {
+    $effect(() => {
         if (!data.successToast) {
             return;
         }
@@ -133,10 +98,10 @@
             showToast = false;
             toastTimer = null;
         }, 4000);
-    });
-
-    onDestroy(() => {
-        clearToastTimer();
+        
+        return () => {
+            clearToastTimer();
+        };
     });
 </script>
 
@@ -159,7 +124,7 @@
                 type="button"
                 class="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                 aria-label="トーストを閉じる"
-                on:click={dismissToast}
+                onclick={dismissToast}
             >
                 <X class="h-4 w-4" />
             </button>
@@ -195,7 +160,7 @@
                                 class="overflow-hidden rounded-lg border-2 transition {index === activeImageIndex
                                     ? 'border-white shadow-lg'
                                     : 'border-white/40 opacity-80 hover:opacity-100'}"
-                                on:click={() => (activeImageIndex = index)}
+                                onclick={() => (activeImageIndex = index)}
                             >
                                 <img
                                     src={imageUrl}

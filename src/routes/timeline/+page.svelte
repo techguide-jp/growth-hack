@@ -1,18 +1,10 @@
 <script lang="ts">
     import TimelineComposer from "$lib/components/timeline/TimelineComposer.svelte";
     import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import type { PageProps } from "./$types";
     import type { TimelinePostView, TimelineScope } from "$lib/shared/timeline";
 
-    export let data: {
-        scope: TimelineScope;
-        posts: TimelinePostView[];
-        myProjects: Array<{
-            id: string;
-            title: string;
-        }>;
-        canViewFollowing: boolean;
-        isLoggedIn: boolean;
-    };
+    let { data }: PageProps = $props();
 </script>
 
 <div class="flex gap-8">
