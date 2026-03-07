@@ -45,6 +45,8 @@ export async function listCommentsForTarget(
   return db
     .select()
     .from(comments)
-    .where(and(eq(comments.targetType, targetType), eq(comments.targetId, targetId)))
+    .where(
+      and(eq(comments.targetType, targetType), eq(comments.targetId, targetId)),
+    )
     .orderBy(comments.createdAt);
 }

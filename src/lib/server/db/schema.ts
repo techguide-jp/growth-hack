@@ -35,10 +35,7 @@ import {
   type TimelineQuestionMeta,
 } from "../../shared/domain.ts";
 import { USER_ROLE_VALUES } from "../../shared/session.ts";
-import type {
-  FocusMode,
-  NotificationRuleMap,
-} from "../../shared/settings.ts";
+import type { FocusMode, NotificationRuleMap } from "../../shared/settings.ts";
 
 type JsonPayload = Record<string, unknown>;
 
@@ -299,7 +296,9 @@ export const userPresence = pgTable(
       .defaultNow(),
   },
   (table) => ({
-    lastSeenAtIndex: index("user_presence_last_seen_at_idx").on(table.lastSeenAt),
+    lastSeenAtIndex: index("user_presence_last_seen_at_idx").on(
+      table.lastSeenAt,
+    ),
   }),
 );
 
@@ -355,7 +354,9 @@ export const announcements = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
   },
   (table) => ({
-    targetTypeIndex: index("announcements_target_type_idx").on(table.targetType),
+    targetTypeIndex: index("announcements_target_type_idx").on(
+      table.targetType,
+    ),
     publishedAtIndex: index("announcements_published_at_idx").on(
       table.publishedAt,
     ),
@@ -390,7 +391,9 @@ export const projectMembers = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    memberRole: projectMemberRole("member_role").notNull().default("contributor"),
+    memberRole: projectMemberRole("member_role")
+      .notNull()
+      .default("contributor"),
     joinedAt: timestamp("joined_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -582,7 +585,10 @@ export const follows = pgTable(
       columns: [table.followerUserId, table.targetType, table.targetId],
       name: "follows_pk",
     }),
-    targetIndex: index("follows_target_idx").on(table.targetType, table.targetId),
+    targetIndex: index("follows_target_idx").on(
+      table.targetType,
+      table.targetId,
+    ),
   }),
 );
 
@@ -755,10 +761,9 @@ export const messages = pgTable(
       .defaultNow(),
   },
   (table) => ({
-    conversationCreatedAtIndex: index("messages_conversation_created_at_idx").on(
-      table.conversationId,
-      table.createdAt,
-    ),
+    conversationCreatedAtIndex: index(
+      "messages_conversation_created_at_idx",
+    ).on(table.conversationId, table.createdAt),
     senderIndex: index("messages_sender_user_id_idx").on(table.senderUserId),
   }),
 );
@@ -775,9 +780,12 @@ export const messageReads = pgTable(
     lastReadAt: timestamp("last_read_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    lastReadMessageId: text("last_read_message_id").references(() => messages.id, {
-      onDelete: "set null",
-    }),
+    lastReadMessageId: text("last_read_message_id").references(
+      () => messages.id,
+      {
+        onDelete: "set null",
+      },
+    ),
   },
   (table) => ({
     pk: primaryKey({
@@ -806,9 +814,12 @@ export const timelinePosts = pgTable(
     }),
     visibility: timelineVisibility("visibility").notNull().default("public"),
     status: timelinePostStatus("status").notNull().default("open"),
-    acceptedCommentId: text("accepted_comment_id").references(() => comments.id, {
-      onDelete: "set null",
-    }),
+    acceptedCommentId: text("accepted_comment_id").references(
+      () => comments.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     questionMeta: jsonb("question_meta").$type<TimelineQuestionMeta | null>(),
     isHidden: boolean("is_hidden").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -820,7 +831,9 @@ export const timelinePosts = pgTable(
   },
   (table) => ({
     createdAtIndex: index("timeline_posts_created_at_idx").on(table.createdAt),
-    authorIndex: index("timeline_posts_author_user_id_idx").on(table.authorUserId),
+    authorIndex: index("timeline_posts_author_user_id_idx").on(
+      table.authorUserId,
+    ),
     projectIndex: index("timeline_posts_project_id_idx").on(table.projectId),
     eventIndex: index("timeline_posts_event_id_idx").on(table.eventId),
     typeStatusIndex: index("timeline_posts_type_status_idx").on(
@@ -856,7 +869,9 @@ export const activityEvents = pgTable(
   },
   (table) => ({
     createdAtIndex: index("activity_events_created_at_idx").on(table.createdAt),
-    actorIndex: index("activity_events_actor_user_id_idx").on(table.actorUserId),
+    actorIndex: index("activity_events_actor_user_id_idx").on(
+      table.actorUserId,
+    ),
     targetIndex: index("activity_events_target_idx").on(
       table.targetType,
       table.targetId,

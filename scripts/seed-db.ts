@@ -383,7 +383,9 @@ async function seedDb() {
 
       await tx
         .insert(schema.follows)
-        .values([{ followerUserId: "u3", targetType: "project", targetId: "p1" }])
+        .values([
+          { followerUserId: "u3", targetType: "project", targetId: "p1" },
+        ])
         .onConflictDoNothing();
 
       await tx
@@ -471,10 +473,26 @@ async function seedDb() {
       await tx
         .insert(schema.conversationMembers)
         .values([
-          { conversationId: "cv1", userId: "u1", joinedAt: new Date(now - 1000 * 60 * 60 * 6) },
-          { conversationId: "cv1", userId: "u2", joinedAt: new Date(now - 1000 * 60 * 60 * 6) },
-          { conversationId: "cv2", userId: "u1", joinedAt: new Date(now - 1000 * 60 * 60 * 24) },
-          { conversationId: "cv2", userId: "u3", joinedAt: new Date(now - 1000 * 60 * 60 * 24) },
+          {
+            conversationId: "cv1",
+            userId: "u1",
+            joinedAt: new Date(now - 1000 * 60 * 60 * 6),
+          },
+          {
+            conversationId: "cv1",
+            userId: "u2",
+            joinedAt: new Date(now - 1000 * 60 * 60 * 6),
+          },
+          {
+            conversationId: "cv2",
+            userId: "u1",
+            joinedAt: new Date(now - 1000 * 60 * 60 * 24),
+          },
+          {
+            conversationId: "cv2",
+            userId: "u3",
+            joinedAt: new Date(now - 1000 * 60 * 60 * 24),
+          },
         ])
         .onConflictDoNothing();
 

@@ -12,7 +12,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     throw error(404, "プロジェクトが見つかりません。");
   }
 
-  if (rawProject.status === "draft" && rawProject.ownerUserId !== locals.user?.id) {
+  if (
+    rawProject.status === "draft" &&
+    rawProject.ownerUserId !== locals.user?.id
+  ) {
     throw error(404, "プロジェクトが見つかりません。");
   }
 
