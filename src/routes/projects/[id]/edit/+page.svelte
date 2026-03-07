@@ -1,5 +1,6 @@
 <script lang="ts">
     import ProjectEditorForm from "$lib/components/projects/ProjectEditorForm.svelte";
+    import type { MediaStorageDriver } from "$lib/shared/media/config";
     import type {
         ProjectHelpType,
         ProjectStage,
@@ -27,6 +28,11 @@
             images: string[];
             status: ProjectStatus;
         };
+        mediaUpload: {
+            driver: MediaStorageDriver;
+            supportsDirectUpload: boolean;
+            userId: string;
+        };
     };
 
     export let form:
@@ -48,6 +54,8 @@
                   demoUrl?: string;
                   tags?: string;
                   keptImagesJson?: string;
+                  uploadedImagesJson?: string;
+                  draftProjectId?: string;
                   statusIntent?: string;
               };
           }
@@ -69,5 +77,13 @@
         </p>
     </section>
 
-    <ProjectEditorForm mode="edit" {form} project={data.project} />
+    <ProjectEditorForm
+        mode="edit"
+        {form}
+        project={data.project}
+        uploadContext={{
+            ...data.mediaUpload,
+            projectId: data.project.id,
+        }}
+    />
 </div>

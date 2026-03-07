@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { upload } from "@vercel/blob/client";
+    import { browser } from "$app/environment";
     import ProjectHelpTypePicker from "$lib/components/projects/ProjectHelpTypePicker.svelte";
     import ProjectTagInput from "$lib/components/projects/ProjectTagInput.svelte";
     import {
@@ -8,11 +10,22 @@
         getProjectPublishChecklist,
         getProjectStageInfo,
     } from "$lib/constants/project";
+    import {
+        prepareProjectScreenshotFiles,
+        releasePreparedProjectScreenshotFile,
+        type PreparedProjectScreenshotFile,
+    } from "$lib/shared/media/client";
+    import {
+        createProjectScreenshotPathname,
+        PROJECT_SCREENSHOT_FILE_INPUT_ACCEPT,
+        type MediaStorageDriver,
+    } from "$lib/shared/media/config";
     import type {
         ProjectHelpType,
         ProjectStage,
         ProjectStatus,
     } from "$lib/shared/domain";
+    import { onDestroy, onMount } from "svelte";
 
     type FormValues = {
         title?: string;
@@ -30,7 +43,33 @@
         demoUrl?: string;
         tags?: string;
         keptImagesJson?: string;
+        uploadedImagesJson?: string;
+        draftProjectId?: string;
         statusIntent?: string;
+    };
+
+    type MediaUploadContext = {
+        driver: MediaStorageDriver;
+        supportsDirectUpload: boolean;
+        userId: string;
+        projectId: string;
+    };
+
+    type LocalPreparedImage = {
+        id: string;
+        file: File;
+        previewUrl: string;
+    };
+
+    type UploadedImage = {
+        id: string;
+        name: string;
+        size: number;
+        url: string;
+        previewUrl: string;
+        progress: number;
+        status: "uploading" | "uploaded";
+        previewIsObjectUrl: boolean;
     };
 
     type EditorProject = {
@@ -61,6 +100,7 @@
           }
         | undefined;
     export let project: EditorProject | undefined = undefined;
+    export let uploadContext: MediaUploadContext;
 
     const stageOptions = Object.entries(PROJECT_STAGE_MAP).map(([value, info]) => ({
         value: value as ProjectStage,
@@ -105,6 +145,16 @@
             default:
                 return "下書きを保存";
         }
+    }
+
+    function toErrorMessage(error: unknown) {
+        return error instanceof Error
+            ? error.message
+            : "スクリーンショットの処理に失敗しました。";
+    }
+
+    function getImageCountLimitMessage() {
+        return `スクリーンショットは${PROJECT_SCREENSHOT_MAX_COUNT}枚まで登録できます。`;
     }
 
     const initialProject = project ?? {
@@ -152,22 +202,258 @@
     let tagsValue = form?.values?.tags ?? initialProject.tags.join(",");
     let keptImages =
         parseJsonStringArray(form?.values?.keptImagesJson) ?? initialProject.images;
+    let uploadedImages: UploadedImage[] = (
+        parseJsonStringArray(form?.values?.uploadedImagesJson) ?? []
+    ).map((imageUrl) => ({
+        id: imageUrl,
+        name: imageUrl.split("/").pop() ?? "uploaded.webp",
+        size: 0,
+        url: imageUrl,
+        previewUrl: imageUrl,
+        progress: 100,
+        status: "uploaded",
+        previewIsObjectUrl: false,
+    }));
+    let localPreparedImages: LocalPreparedImage[] = [];
+    let draftProjectId = form?.values?.draftProjectId ?? uploadContext.projectId;
     let screenshotInput: HTMLInputElement | undefined = undefined;
-    let selectedScreenshotFiles: FileList | null = null;
     let isSubmitting = false;
+    let isPreparingScreenshots = false;
+    let imageMessage = "";
+    let uploadedImageUrls: string[] = [];
     const screenshotSizeLimitInMb = Math.floor(
         PROJECT_SCREENSHOT_MAX_SIZE_BYTES / 1024 / 1024,
     );
+
+    function releaseLocalPreparedImages(images: LocalPreparedImage[]) {
+        for (const image of images) {
+            releasePreparedProjectScreenshotFile(image.previewUrl);
+        }
+    }
+
+    function releaseUploadedImagePreview(image: UploadedImage) {
+        if (image.previewIsObjectUrl) {
+            releasePreparedProjectScreenshotFile(image.previewUrl);
+        }
+    }
+
+    function syncScreenshotInputFiles() {
+        if (!browser || !screenshotInput) {
+            return;
+        }
+
+        const dataTransfer = new DataTransfer();
+
+        for (const image of localPreparedImages) {
+            dataTransfer.items.add(image.file);
+        }
+
+        screenshotInput.files = dataTransfer.files;
+    }
+
+    async function cleanupUploadedImages(imageUrls: string[], quietly = false) {
+        if (!browser || imageUrls.length === 0) {
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/uploads/images/cleanup", {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    projectId: uploadContext.projectId,
+                    imageUrls,
+                }),
+                keepalive: quietly,
+            });
+
+            if (!response.ok && !quietly) {
+                const payload = await response.json().catch(() => ({}));
+                throw new Error(
+                    typeof payload?.message === "string"
+                        ? payload.message
+                        : "スクリーンショットの cleanup に失敗しました。",
+                );
+            }
+        } catch (error) {
+            if (!quietly) {
+                imageMessage = toErrorMessage(error);
+            }
+        }
+    }
 
     function removeKeptImage(imageUrl: string) {
         keptImages = keptImages.filter((currentImageUrl) => currentImageUrl !== imageUrl);
     }
 
-    function clearSelectedScreenshots() {
-        selectedScreenshotFiles = null;
+    function removeLocalPreparedImage(imageId: string) {
+        const target = localPreparedImages.find((image) => image.id === imageId);
+
+        if (target) {
+            releasePreparedProjectScreenshotFile(target.previewUrl);
+        }
+
+        localPreparedImages = localPreparedImages.filter(
+            (image) => image.id !== imageId,
+        );
+        syncScreenshotInputFiles();
+    }
+
+    async function removeUploadedImage(imageId: string) {
+        const target = uploadedImages.find((image) => image.id === imageId);
+
+        if (!target || target.status !== "uploaded") {
+            return;
+        }
+
+        releaseUploadedImagePreview(target);
+        uploadedImages = uploadedImages.filter((image) => image.id !== imageId);
+        await cleanupUploadedImages([target.url]);
+    }
+
+    async function clearPendingScreenshots() {
+        releaseLocalPreparedImages(localPreparedImages);
+        localPreparedImages = [];
+
+        for (const image of uploadedImages) {
+            releaseUploadedImagePreview(image);
+        }
+
+        const imageUrls = uploadedImages
+            .filter((image) => image.status === "uploaded")
+            .map((image) => image.url);
+
+        uploadedImages = [];
+        syncScreenshotInputFiles();
+        await cleanupUploadedImages(imageUrls);
 
         if (screenshotInput) {
             screenshotInput.value = "";
+        }
+    }
+
+    async function uploadPreparedImages(preparedImages: PreparedProjectScreenshotFile[]) {
+        const clientPayload = JSON.stringify({
+            scope: "project-screenshot",
+            userId: uploadContext.userId,
+            projectId: uploadContext.projectId,
+        });
+
+        for (const preparedImage of preparedImages) {
+            const imageId = crypto.randomUUID();
+            const uploadingImage: UploadedImage = {
+                id: imageId,
+                name: preparedImage.file.name,
+                size: preparedImage.file.size,
+                url: "",
+                previewUrl: preparedImage.previewUrl,
+                progress: 0,
+                status: "uploading",
+                previewIsObjectUrl: true,
+            };
+
+            uploadedImages = [...uploadedImages, uploadingImage];
+
+            try {
+                const result = await upload(
+                    createProjectScreenshotPathname({
+                        userId: uploadContext.userId,
+                        projectId: uploadContext.projectId,
+                    }),
+                    preparedImage.file,
+                    {
+                        access: "public",
+                        clientPayload,
+                        handleUploadUrl: "/api/uploads/images",
+                        onUploadProgress: (event) => {
+                            uploadedImages = uploadedImages.map((image) =>
+                                image.id === imageId
+                                    ? {
+                                          ...image,
+                                          progress: event.percentage,
+                                      }
+                                    : image,
+                            );
+                        },
+                    },
+                );
+
+                uploadedImages = uploadedImages.map((image) =>
+                    image.id === imageId
+                        ? {
+                              ...image,
+                              url: result.url,
+                              previewUrl: result.url,
+                              progress: 100,
+                              status: "uploaded",
+                              previewIsObjectUrl: false,
+                          }
+                        : image,
+                );
+                releasePreparedProjectScreenshotFile(preparedImage.previewUrl);
+            } catch (error) {
+                releasePreparedProjectScreenshotFile(preparedImage.previewUrl);
+                uploadedImages = uploadedImages.filter((image) => image.id !== imageId);
+                throw error;
+            }
+        }
+    }
+
+    async function handleScreenshotSelection(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const rawFiles = input.files ? Array.from(input.files) : [];
+
+        if (rawFiles.length === 0) {
+            return;
+        }
+
+        imageMessage = "";
+        isPreparingScreenshots = true;
+
+        try {
+            const currentCount =
+                keptImages.length + localPreparedImages.length + uploadedImages.length;
+
+            if (currentCount + rawFiles.length > PROJECT_SCREENSHOT_MAX_COUNT) {
+                throw new Error(getImageCountLimitMessage());
+            }
+
+            const preparedImages = await prepareProjectScreenshotFiles(rawFiles);
+
+            if (
+                keptImages.length +
+                    localPreparedImages.length +
+                    uploadedImages.length +
+                    preparedImages.length >
+                PROJECT_SCREENSHOT_MAX_COUNT
+            ) {
+                for (const image of preparedImages) {
+                    releasePreparedProjectScreenshotFile(image.previewUrl);
+                }
+
+                throw new Error(getImageCountLimitMessage());
+            }
+
+            if (uploadContext.supportsDirectUpload) {
+                await uploadPreparedImages(preparedImages);
+            } else {
+                localPreparedImages = [
+                    ...localPreparedImages,
+                    ...preparedImages.map((image) => ({
+                        id: crypto.randomUUID(),
+                        file: image.file,
+                        previewUrl: image.previewUrl,
+                    })),
+                ];
+                syncScreenshotInputFiles();
+            }
+        } catch (error) {
+            imageMessage = toErrorMessage(error);
+        } finally {
+            isPreparingScreenshots = false;
+            input.value = "";
         }
     }
 
@@ -176,9 +462,13 @@
     );
     $: highlights = parseDelimitedValues(highlightsValue);
     $: tags = parseDelimitedValues(tagsValue);
-    $: pendingScreenshotFiles = selectedScreenshotFiles
-        ? Array.from(selectedScreenshotFiles)
-        : [];
+    $: uploadedImageUrls = uploadedImages
+        .filter((image) => image.status === "uploaded")
+        .map((image) => image.url);
+    $: pendingUploadCount = uploadedImages.filter(
+        (image) => image.status === "uploading",
+    ).length;
+    $: localPendingFiles = localPreparedImages.map((image) => image.file);
     $: publishChecklist = getProjectPublishChecklist({
         highlights,
         nextMilestone,
@@ -189,7 +479,8 @@
         demoUrl,
         images: [
             ...keptImages,
-            ...pendingScreenshotFiles.map((file) => file.name),
+            ...uploadedImageUrls,
+            ...localPendingFiles.map((file) => file.name),
         ],
     });
     $: publishReady = publishChecklist.every((item) => item.complete);
@@ -198,6 +489,37 @@
         mode === "edit" &&
         initialProject.status === "published" &&
         !publishReady;
+    $: if (browser) {
+        syncScreenshotInputFiles();
+    }
+
+    onMount(() => {
+        if (!browser) {
+            return;
+        }
+
+        const handlePageHide = () => {
+            if (isSubmitting || uploadedImageUrls.length === 0) {
+                return;
+            }
+
+            void cleanupUploadedImages(uploadedImageUrls, true);
+        };
+
+        window.addEventListener("pagehide", handlePageHide);
+
+        return () => {
+            window.removeEventListener("pagehide", handlePageHide);
+        };
+    });
+
+    onDestroy(() => {
+        releaseLocalPreparedImages(localPreparedImages);
+
+        for (const image of uploadedImages) {
+            releaseUploadedImagePreview(image);
+        }
+    });
 </script>
 
 <form
@@ -481,38 +803,50 @@
                             スクリーンショット
                         </label>
                         <p class="mt-1 text-xs text-gray-500">
-                            PNG / JPEG / WebP / GIF / AVIF を最大{PROJECT_SCREENSHOT_MAX_COUNT}枚、
+                            JPEG / PNG / WebP / HEIC / HEIF を最大{PROJECT_SCREENSHOT_MAX_COUNT}枚、
                             1枚{screenshotSizeLimitInMb}MBまで登録できます。
                         </p>
                     </div>
 
-                    {#if pendingScreenshotFiles.length > 0}
+                    {#if localPreparedImages.length > 0 || uploadedImages.length > 0}
                         <button
                             type="button"
                             class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
-                            on:click={clearSelectedScreenshots}
+                            on:click={clearPendingScreenshots}
                         >
-                            選択をクリア
+                            今回追加分をクリア
                         </button>
                     {/if}
                 </div>
 
                 <input
                     bind:this={screenshotInput}
-                    bind:files={selectedScreenshotFiles}
                     id="screenshots"
                     name="screenshots"
                     type="file"
                     multiple
-                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                    accept={PROJECT_SCREENSHOT_FILE_INPUT_ACCEPT}
                     class="block w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-700"
+                    on:change={handleScreenshotSelection}
                 />
 
+                <input type="hidden" name="draftProjectId" value={draftProjectId} />
                 <input
                     type="hidden"
                     name="keptImagesJson"
                     value={JSON.stringify(keptImages)}
                 />
+                <input
+                    type="hidden"
+                    name="uploadedImagesJson"
+                    value={JSON.stringify(uploadedImageUrls)}
+                />
+
+                {#if imageMessage}
+                    <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        {imageMessage}
+                    </div>
+                {/if}
 
                 {#if keptImages.length > 0}
                     <div class="space-y-2">
@@ -545,21 +879,83 @@
                     </div>
                 {/if}
 
-                {#if pendingScreenshotFiles.length > 0}
+                {#if uploadedImages.length > 0 || localPreparedImages.length > 0}
                     <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                         <div class="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">
                             今回追加する画像
                         </div>
-                        <ul class="mt-3 space-y-2 text-sm text-indigo-900">
-                            {#each pendingScreenshotFiles as file}
-                                <li class="flex items-center justify-between gap-3">
-                                    <span class="truncate">{file.name}</span>
-                                    <span class="shrink-0 text-xs text-indigo-700">
-                                        {(file.size / 1024 / 1024).toFixed(1)} MB
-                                    </span>
-                                </li>
+                        <div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {#each uploadedImages as image}
+                                <div class="overflow-hidden rounded-2xl border border-indigo-200 bg-white">
+                                    <img
+                                        src={image.previewUrl}
+                                        alt={image.name}
+                                        class="aspect-video w-full object-cover"
+                                    />
+                                    <div class="space-y-2 px-4 py-3">
+                                        <div class="flex items-center justify-between gap-3">
+                                            <div class="min-w-0 text-xs text-gray-600">
+                                                <div class="truncate font-bold text-gray-900">
+                                                    {image.name}
+                                                </div>
+                                                <div>
+                                                    {(image.size / 1024 / 1024).toFixed(1)} MB
+                                                </div>
+                                            </div>
+                                            {#if image.status === "uploaded"}
+                                                <button
+                                                    type="button"
+                                                    class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                                                    on:click={() => removeUploadedImage(image.id)}
+                                                >
+                                                    削除
+                                                </button>
+                                            {/if}
+                                        </div>
+                                        {#if image.status === "uploading"}
+                                            <div class="space-y-1">
+                                                <div class="text-xs font-bold text-indigo-700">
+                                                    アップロード中... {Math.round(image.progress)}%
+                                                </div>
+                                                <div class="h-2 rounded-full bg-indigo-100">
+                                                    <div
+                                                        class="h-2 rounded-full bg-indigo-500 transition-[width]"
+                                                        style={`width: ${image.progress}%`}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        {/if}
+                                    </div>
+                                </div>
                             {/each}
-                        </ul>
+
+                            {#each localPreparedImages as image}
+                                <div class="overflow-hidden rounded-2xl border border-indigo-200 bg-white">
+                                    <img
+                                        src={image.previewUrl}
+                                        alt={image.file.name}
+                                        class="aspect-video w-full object-cover"
+                                    />
+                                    <div class="flex items-center justify-between gap-3 px-4 py-3">
+                                        <div class="min-w-0 text-xs text-gray-600">
+                                            <div class="truncate font-bold text-gray-900">
+                                                {image.file.name}
+                                            </div>
+                                            <div>
+                                                {(image.file.size / 1024 / 1024).toFixed(1)} MB
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                                            on:click={() => removeLocalPreparedImage(image.id)}
+                                        >
+                                            削除
+                                        </button>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
                     </div>
                 {/if}
             </div>
@@ -595,7 +991,7 @@
                 type="submit"
                 name="statusIntent"
                 value="draft"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                 class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
             >
                 {isSubmitting ? "保存中..." : "下書きを作成"}
@@ -604,7 +1000,7 @@
                 type="submit"
                 name="statusIntent"
                 value="published"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                 class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
                 {isSubmitting ? "保存中..." : "公開して作成"}
@@ -614,7 +1010,7 @@
                 type="submit"
                 name="statusIntent"
                 value="keep"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                 class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
                 {isSubmitting ? "保存中..." : keepButtonLabel}
@@ -625,7 +1021,7 @@
                     type="submit"
                     name="statusIntent"
                     value="published"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                     class="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                     公開する
@@ -637,7 +1033,7 @@
                     type="submit"
                     name="statusIntent"
                     value="draft"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                     class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                     下書きに戻す
@@ -649,7 +1045,7 @@
                     type="submit"
                     name="statusIntent"
                     value="archived"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                     class="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                     アーカイブする

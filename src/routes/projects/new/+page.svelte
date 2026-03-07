@@ -1,6 +1,16 @@
 <script lang="ts">
     import ProjectEditorForm from "$lib/components/projects/ProjectEditorForm.svelte";
+    import type { MediaStorageDriver } from "$lib/shared/media/config";
     import { ArrowLeft } from "lucide-svelte";
+
+    export let data: {
+        draftProjectId: string;
+        mediaUpload: {
+            driver: MediaStorageDriver;
+            supportsDirectUpload: boolean;
+            userId: string;
+        };
+    };
 
     export let form:
         | {
@@ -21,6 +31,8 @@
                   demoUrl?: string;
                   tags?: string;
                   keptImagesJson?: string;
+                  uploadedImagesJson?: string;
+                  draftProjectId?: string;
                   statusIntent?: string;
               };
           }
@@ -42,5 +54,12 @@
         </p>
     </section>
 
-    <ProjectEditorForm mode="create" {form} />
+    <ProjectEditorForm
+        mode="create"
+        {form}
+        uploadContext={{
+            ...data.mediaUpload,
+            projectId: form?.values?.draftProjectId ?? data.draftProjectId,
+        }}
+    />
 </div>

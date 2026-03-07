@@ -29,8 +29,11 @@ type ListProjectsOptions = {
 };
 
 type ProjectAssetOptions = {
+  projectId?: string;
   keptImageUrls?: string[];
   screenshotFiles?: File[];
+  stagedImageUrls?: string[];
+  uploaderUserId: string;
 };
 
 export type ProjectView = {
@@ -218,15 +221,18 @@ export async function listProjects(options: ListProjectsOptions = {}) {
 export async function createProject(
   ownerUserId: string,
   input: CreateProjectInput,
-  options: ProjectAssetOptions = {},
+  options: ProjectAssetOptions,
 ) {
   const db = getDb();
-  const projectId = crypto.randomUUID();
+  const projectId = options.projectId ?? crypto.randomUUID();
   const now = new Date();
   const uploadedImageUrls = await saveProjectScreenshotFiles(
+    options.uploaderUserId,
     projectId,
     options.screenshotFiles ?? [],
   );
+  const stagedImageUrls = options.stagedImageUrls ?? [];
+  const nextImageUrls = [...stagedImageUrls, ...uploadedImageUrls];
 
   try {
     await db.transaction(async (tx) => {
@@ -271,10 +277,13 @@ export async function createProject(
       }
 
       await syncProjectTags(tx, projectId, input.tags, now);
-      await syncProjectScreenshots(tx, projectId, uploadedImageUrls, now);
+      await syncProjectScreenshots(tx, projectId, nextImageUrls, now);
     });
   } catch (error) {
-    await deleteProjectScreenshotFiles(uploadedImageUrls);
+    await deleteProjectScreenshotFiles([
+      ...stagedImageUrls,
+      ...uploadedImageUrls,
+    ]);
     throw error;
   }
 
@@ -284,7 +293,7 @@ export async function createProject(
 export async function updateProject(
   projectId: string,
   input: UpdateProjectInput,
-  options: ProjectAssetOptions = {},
+  options: ProjectAssetOptions,
 ) {
   const db = getDb();
   const now = new Date();
@@ -302,10 +311,16 @@ export async function updateProject(
     (imageUrl) => !keptImageUrls.includes(imageUrl),
   );
   const uploadedImageUrls = await saveProjectScreenshotFiles(
+    options.uploaderUserId,
     projectId,
     options.screenshotFiles ?? [],
   );
-  const nextImageUrls = [...keptImageUrls, ...uploadedImageUrls];
+  const stagedImageUrls = options.stagedImageUrls ?? [];
+  const nextImageUrls = [
+    ...keptImageUrls,
+    ...stagedImageUrls,
+    ...uploadedImageUrls,
+  ];
 
   if (input.title !== undefined) {
     updateValues.title = input.title;
@@ -389,14 +404,19 @@ export async function updateProject(
       }
 
       if (input.tags !== undefined) {
-        await tx.delete(projectTags).where(eq(projectTags.projectId, projectId));
+        await tx
+          .delete(projectTags)
+          .where(eq(projectTags.projectId, projectId));
         await syncProjectTags(tx, projectId, input.tags, now);
       }
 
       await syncProjectScreenshots(tx, projectId, nextImageUrls, now);
     });
   } catch (error) {
-    await deleteProjectScreenshotFiles(uploadedImageUrls);
+    await deleteProjectScreenshotFiles([
+      ...stagedImageUrls,
+      ...uploadedImageUrls,
+    ]);
     throw error;
   }
 
