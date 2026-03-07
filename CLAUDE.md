@@ -15,15 +15,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 主要ライブラリ
 
-| カテゴリ | ライブラリ | 用途 |
-|---------|-----------|------|
-| ORM | drizzle-orm, drizzle-kit | DB操作、マイグレーション |
-| 認証 | lucia | セッション管理、OAuth/メール認証 |
-| フォーム | sveltekit-superforms | サーバーバリデーション統合 |
-| バリデーション | zod | スキーマ定義、API入力検証 |
-| UI | shadcn-svelte, tailwindcss | コンポーネント、スタイリング |
-| メール | resend | 通知メール送信 |
-| ストレージ | @aws-sdk/client-s3 | 署名URL生成、画像アップロード |
+| カテゴリ       | ライブラリ                 | 用途                             |
+| -------------- | -------------------------- | -------------------------------- |
+| ORM            | drizzle-orm, drizzle-kit   | DB操作、マイグレーション         |
+| 認証           | lucia                      | セッション管理、OAuth/メール認証 |
+| フォーム       | sveltekit-superforms       | サーバーバリデーション統合       |
+| バリデーション | zod                        | スキーマ定義、API入力検証        |
+| UI             | shadcn-svelte, tailwindcss | コンポーネント、スタイリング     |
+| メール         | resend                     | 通知メール送信                   |
+| ストレージ     | @aws-sdk/client-s3         | 署名URL生成、画像アップロード    |
 
 ## ユーザロール
 
@@ -33,14 +33,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 主要ドメイン
 
 ### タイムライン投稿タイプ
+
 - `progress`: 進捗報告
 - `question`: 相談（固定テンプレ：状況/困りごと/試したこと/環境）
 - `showcase`: 見せびらかし
 
 ### 支援記録ステータス
+
 `awaiting_owner` → `confirmed`（受領確定）/ `cancelled`（支援者取消）/ `rejected`（オーナー却下）
 
 ### リアクション種類（5種）
+
 `clap`, `like`, `idea`, `fire`, `help`
 
 ## ルーティング構造
