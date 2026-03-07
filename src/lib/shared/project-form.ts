@@ -57,9 +57,9 @@ export type ProjectFormSubmissionState = {
 export function hasProjectFormErrors(errors?: ProjectFormErrors | null) {
   return Boolean(
     errors &&
-      Object.values(errors).some(
-        (messages) => Array.isArray(messages) && messages.length > 0,
-      ),
+    Object.values(errors).some(
+      (messages) => Array.isArray(messages) && messages.length > 0,
+    ),
   );
 }
 
@@ -71,8 +71,7 @@ export const PROJECT_SUCCESS_TOAST_VALUES = [
   "archived",
 ] as const;
 
-export type ProjectSuccessToast =
-  (typeof PROJECT_SUCCESS_TOAST_VALUES)[number];
+export type ProjectSuccessToast = (typeof PROJECT_SUCCESS_TOAST_VALUES)[number];
 
 export function isProjectSuccessToast(
   value: string | null | undefined,

@@ -68,9 +68,7 @@ describe("project form validation", () => {
     }
 
     expect(result.firstErrorField).toBe("title");
-    expect(result.errors.title).toEqual([
-      "プロジェクト名を入力してください。",
-    ]);
+    expect(result.errors.title).toEqual(["プロジェクト名を入力してください。"]);
     expect(result.errors.oneLiner).toEqual([
       "ひとことで何を作っているかを入力してください。",
     ]);

@@ -114,7 +114,9 @@ const projectFormErrorFieldSet = new Set<ProjectFormErrorField>(
   PROJECT_FORM_ERROR_FIELD_ORDER,
 );
 
-function isProjectFormErrorField(value: string): value is ProjectFormErrorField {
+function isProjectFormErrorField(
+  value: string,
+): value is ProjectFormErrorField {
   return projectFormErrorFieldSet.has(value as ProjectFormErrorField);
 }
 
@@ -222,11 +224,7 @@ function addPublishRequirementErrors(
         );
         break;
       case "tags":
-        addProjectFormError(
-          errors,
-          "tags",
-          "タグを2〜5件入力してください。",
-        );
+        addProjectFormError(errors, "tags", "タグを2〜5件入力してください。");
         break;
       case "assets":
         addProjectFormError(
@@ -341,7 +339,8 @@ export function validateProjectFormValues(
       errors,
       firstErrorField: null,
       checklist,
-      message: parsed.error.issues[0]?.message ?? "入力内容を確認してください。",
+      message:
+        parsed.error.issues[0]?.message ?? "入力内容を確認してください。",
     };
   }
 

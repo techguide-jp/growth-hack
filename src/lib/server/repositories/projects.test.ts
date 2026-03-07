@@ -23,11 +23,7 @@ describe("project screenshot mutation helpers", () => {
         uploadedImageUrls: ["/images/c.webp"],
       }),
     ).toEqual({
-      nextImageUrls: [
-        "/images/b.webp",
-        "/images/a.webp",
-        "/images/c.webp",
-      ],
+      nextImageUrls: ["/images/b.webp", "/images/a.webp", "/images/c.webp"],
       removedImageUrls: [],
     });
   });
