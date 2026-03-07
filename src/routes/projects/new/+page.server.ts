@@ -64,7 +64,9 @@ export const actions: Actions = {
       });
     }
 
-    const duplicateDraftProject = await getProjectById(draftProjectIdResult.data);
+    const duplicateDraftProject = await getProjectById(
+      draftProjectIdResult.data,
+    );
 
     if (duplicateDraftProject) {
       await cleanupProjectScreenshotFiles({
