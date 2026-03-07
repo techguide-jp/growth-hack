@@ -1,5 +1,6 @@
 import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { getDb } from "$lib/server/db";
+import { listReferencedProjectScreenshotUrls } from "$lib/server/media/reference-service";
 import {
   deleteProjectScreenshotFiles,
   saveProjectScreenshotFiles,
@@ -29,9 +30,70 @@ type ListProjectsOptions = {
 };
 
 type ProjectAssetOptions = {
+  projectId?: string;
   keptImageUrls?: string[];
   screenshotFiles?: File[];
+  stagedImageUrls?: string[];
+  uploaderUserId: string;
 };
+
+function mergeProjectScreenshotUrls(...groups: string[][]) {
+  return [...new Set(groups.flatMap((group) => group))];
+}
+
+export function excludeReferencedProjectScreenshotUrls(
+  imageUrls: string[],
+  referencedImageUrls: string[],
+) {
+  const referencedSet = new Set(referencedImageUrls);
+
+  return mergeProjectScreenshotUrls(imageUrls).filter(
+    (imageUrl) => !referencedSet.has(imageUrl),
+  );
+}
+
+export function buildProjectScreenshotMutationPlan(options: {
+  currentImageUrls: string[];
+  keptImageUrls: string[];
+  stagedImageUrls?: string[];
+  uploadedImageUrls?: string[];
+}) {
+  const nextImageUrls = mergeProjectScreenshotUrls(
+    options.keptImageUrls,
+    options.stagedImageUrls ?? [],
+    options.uploadedImageUrls ?? [],
+  );
+  const nextImageUrlSet = new Set(nextImageUrls);
+  const removedImageUrls = options.currentImageUrls.filter(
+    (imageUrl) => !nextImageUrlSet.has(imageUrl),
+  );
+
+  return {
+    nextImageUrls,
+    removedImageUrls,
+  };
+}
+
+async function cleanupUnreferencedProjectScreenshotFiles(imageUrls: string[]) {
+  const uniqueUrls = mergeProjectScreenshotUrls(imageUrls);
+
+  if (uniqueUrls.length === 0) {
+    return;
+  }
+
+  const referencedImageUrls =
+    await listReferencedProjectScreenshotUrls(uniqueUrls);
+  const deletableImageUrls = excludeReferencedProjectScreenshotUrls(
+    uniqueUrls,
+    referencedImageUrls,
+  );
+
+  if (deletableImageUrls.length === 0) {
+    return;
+  }
+
+  await deleteProjectScreenshotFiles(deletableImageUrls);
+}
 
 export type ProjectView = {
   id: string;
@@ -218,14 +280,20 @@ export async function listProjects(options: ListProjectsOptions = {}) {
 export async function createProject(
   ownerUserId: string,
   input: CreateProjectInput,
-  options: ProjectAssetOptions = {},
+  options: ProjectAssetOptions,
 ) {
   const db = getDb();
-  const projectId = crypto.randomUUID();
+  const projectId = options.projectId ?? crypto.randomUUID();
   const now = new Date();
   const uploadedImageUrls = await saveProjectScreenshotFiles(
+    options.uploaderUserId,
     projectId,
     options.screenshotFiles ?? [],
+  );
+  const stagedImageUrls = options.stagedImageUrls ?? [];
+  const nextImageUrls = mergeProjectScreenshotUrls(
+    stagedImageUrls,
+    uploadedImageUrls,
   );
 
   try {
@@ -271,10 +339,13 @@ export async function createProject(
       }
 
       await syncProjectTags(tx, projectId, input.tags, now);
-      await syncProjectScreenshots(tx, projectId, uploadedImageUrls, now);
+      await syncProjectScreenshots(tx, projectId, nextImageUrls, now);
     });
   } catch (error) {
-    await deleteProjectScreenshotFiles(uploadedImageUrls);
+    await cleanupUnreferencedProjectScreenshotFiles([
+      ...stagedImageUrls,
+      ...uploadedImageUrls,
+    ]);
     throw error;
   }
 
@@ -284,7 +355,7 @@ export async function createProject(
 export async function updateProject(
   projectId: string,
   input: UpdateProjectInput,
-  options: ProjectAssetOptions = {},
+  options: ProjectAssetOptions,
 ) {
   const db = getDb();
   const now = new Date();
@@ -298,14 +369,19 @@ export async function updateProject(
     updatedAt: now,
   };
   const keptImageUrls = options.keptImageUrls ?? currentProject.images;
-  const removedImageUrls = currentProject.images.filter(
-    (imageUrl) => !keptImageUrls.includes(imageUrl),
-  );
   const uploadedImageUrls = await saveProjectScreenshotFiles(
+    options.uploaderUserId,
     projectId,
     options.screenshotFiles ?? [],
   );
-  const nextImageUrls = [...keptImageUrls, ...uploadedImageUrls];
+  const stagedImageUrls = options.stagedImageUrls ?? [];
+  const { nextImageUrls, removedImageUrls } =
+    buildProjectScreenshotMutationPlan({
+      currentImageUrls: currentProject.images,
+      keptImageUrls,
+      stagedImageUrls,
+      uploadedImageUrls,
+    });
 
   if (input.title !== undefined) {
     updateValues.title = input.title;
@@ -389,14 +465,19 @@ export async function updateProject(
       }
 
       if (input.tags !== undefined) {
-        await tx.delete(projectTags).where(eq(projectTags.projectId, projectId));
+        await tx
+          .delete(projectTags)
+          .where(eq(projectTags.projectId, projectId));
         await syncProjectTags(tx, projectId, input.tags, now);
       }
 
       await syncProjectScreenshots(tx, projectId, nextImageUrls, now);
     });
   } catch (error) {
-    await deleteProjectScreenshotFiles(uploadedImageUrls);
+    await cleanupUnreferencedProjectScreenshotFiles([
+      ...stagedImageUrls,
+      ...uploadedImageUrls,
+    ]);
     throw error;
   }
 

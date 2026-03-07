@@ -1,61 +1,25 @@
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import {
-  PROJECT_SCREENSHOT_MAX_COUNT,
-  PROJECT_SCREENSHOT_MAX_SIZE_BYTES,
-} from "$lib/constants/project";
+  deleteProjectScreenshotImageUrls,
+  readProjectScreenshotImage,
+  saveProjectScreenshotBuffer,
+  validateProjectScreenshotManagedUrl,
+} from "$lib/server/media/storage";
+import { listReferencedProjectScreenshotUrls } from "$lib/server/media/reference-service";
+import {
+  getProjectScreenshotFileValidationMessage,
+  processProjectScreenshotFile,
+  validateProcessedProjectScreenshotBuffer,
+} from "$lib/server/media/validation";
+import { PROJECT_SCREENSHOT_MAX_COUNT } from "$lib/shared/media/config";
 
-const PROJECT_SCREENSHOT_UPLOAD_DIR = join(
-  process.cwd(),
-  "static",
-  "uploads",
-  "projects",
-);
-const PROJECT_SCREENSHOT_URL_PREFIX = "/uploads/projects/";
-
-const PROJECT_SCREENSHOT_EXTENSION_MAP: Record<string, string> = {
-  "image/avif": ".avif",
-  "image/gif": ".gif",
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/webp": ".webp",
-};
+const INVALID_SCREENSHOT_SELECTION_MESSAGE =
+  "スクリーンショットの指定が不正です。画面を再読み込みしてやり直してください。";
 
 function isFileEntry(value: FormDataEntryValue): value is File {
   return value instanceof File;
 }
 
-function isProjectScreenshotUrl(url: string) {
-  return url.startsWith(PROJECT_SCREENSHOT_URL_PREFIX);
-}
-
-function toProjectScreenshotPath(url: string) {
-  if (!isProjectScreenshotUrl(url)) {
-    return null;
-  }
-
-  const relativePath = url.slice(PROJECT_SCREENSHOT_URL_PREFIX.length);
-
-  if (relativePath.length === 0 || relativePath.includes("..")) {
-    return null;
-  }
-
-  return join(PROJECT_SCREENSHOT_UPLOAD_DIR, relativePath);
-}
-
-export function getProjectScreenshotFiles(
-  formData: FormData,
-  key = "screenshots",
-) {
-  return formData
-    .getAll(key)
-    .filter(isFileEntry)
-    .filter((file) => file.size > 0);
-}
-
-export function parseKeptProjectScreenshotUrls(
-  value: FormDataEntryValue | null,
-) {
+function parseImageUrlArray(value: FormDataEntryValue | null) {
   if (value === null) {
     return [];
   }
@@ -86,85 +50,176 @@ export function parseKeptProjectScreenshotUrls(
   }
 }
 
+export function getProjectScreenshotFiles(
+  formData: FormData,
+  key = "screenshots",
+) {
+  return formData
+    .getAll(key)
+    .filter(isFileEntry)
+    .filter((file) => file.size > 0);
+}
+
+export function parseKeptProjectScreenshotUrls(
+  value: FormDataEntryValue | null,
+) {
+  return parseImageUrlArray(value);
+}
+
+export function parseUploadedProjectScreenshotUrls(
+  value: FormDataEntryValue | null,
+) {
+  return parseImageUrlArray(value);
+}
+
+export function validateNewProjectScreenshotUrls(keptImageUrls: string[]) {
+  if (keptImageUrls.length > 0) {
+    return INVALID_SCREENSHOT_SELECTION_MESSAGE;
+  }
+
+  return null;
+}
+
 export function validateProjectScreenshots(options: {
   files: File[];
   keptImageUrls: string[];
+  uploadedImageUrls: string[];
   allowedImageUrls?: string[];
 }) {
-  const { files, keptImageUrls, allowedImageUrls } = options;
+  const { files, keptImageUrls, uploadedImageUrls, allowedImageUrls } = options;
   const allowedSet = new Set(allowedImageUrls ?? []);
 
   if (
     allowedImageUrls &&
     keptImageUrls.some((imageUrl) => !allowedSet.has(imageUrl))
   ) {
-    return "スクリーンショットの指定が不正です。画面を再読み込みしてやり直してください。";
+    return INVALID_SCREENSHOT_SELECTION_MESSAGE;
   }
 
-  if (keptImageUrls.length + files.length > PROJECT_SCREENSHOT_MAX_COUNT) {
+  if (
+    keptImageUrls.length + uploadedImageUrls.length + files.length >
+    PROJECT_SCREENSHOT_MAX_COUNT
+  ) {
     return `スクリーンショットは${PROJECT_SCREENSHOT_MAX_COUNT}枚まで登録できます。`;
   }
 
   for (const file of files) {
-    if (!(file.type in PROJECT_SCREENSHOT_EXTENSION_MAP)) {
-      return "スクリーンショットは PNG / JPEG / WebP / GIF / AVIF の画像だけ登録できます。";
-    }
+    const validationMessage = getProjectScreenshotFileValidationMessage(file);
 
-    if (file.size > PROJECT_SCREENSHOT_MAX_SIZE_BYTES) {
-      return `スクリーンショットは1枚あたり${Math.floor(PROJECT_SCREENSHOT_MAX_SIZE_BYTES / 1024 / 1024)}MB以内で登録してください。`;
+    if (validationMessage) {
+      return validationMessage;
     }
   }
 
   return null;
 }
 
+export async function validateStagedProjectScreenshotUrls(options: {
+  userId: string;
+  projectId: string;
+  imageUrls: string[];
+}) {
+  const uniqueUrls = [
+    ...new Set(options.imageUrls.map((url) => url.trim()).filter(Boolean)),
+  ];
+
+  for (const imageUrl of uniqueUrls) {
+    const ownershipMessage = validateProjectScreenshotManagedUrl({
+      userId: options.userId,
+      projectId: options.projectId,
+      url: imageUrl,
+    });
+
+    if (ownershipMessage) {
+      return {
+        success: false as const,
+        message: ownershipMessage,
+      };
+    }
+
+    try {
+      const image = await readProjectScreenshotImage({ url: imageUrl });
+      const validationMessage = await validateProcessedProjectScreenshotBuffer({
+        buffer: image.buffer,
+        contentType: image.contentType,
+      });
+
+      if (validationMessage) {
+        return {
+          success: false as const,
+          message: validationMessage,
+        };
+      }
+    } catch {
+      return {
+        success: false as const,
+        message:
+          "アップロード済みスクリーンショットの確認に失敗しました。再アップロードしてください。",
+      };
+    }
+  }
+
+  return {
+    success: true as const,
+    imageUrls: uniqueUrls,
+  };
+}
+
 export async function saveProjectScreenshotFiles(
+  userId: string,
   projectId: string,
   files: File[],
 ) {
-  if (files.length === 0) {
-    return [];
-  }
-
-  const targetDir = join(PROJECT_SCREENSHOT_UPLOAD_DIR, projectId);
-  await mkdir(targetDir, { recursive: true });
-
   const imageUrls: string[] = [];
 
   for (const file of files) {
-    const extension = PROJECT_SCREENSHOT_EXTENSION_MAP[file.type];
-    const fileName = `${crypto.randomUUID()}${extension}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(join(targetDir, fileName), buffer);
-    imageUrls.push(`${PROJECT_SCREENSHOT_URL_PREFIX}${projectId}/${fileName}`);
+    const buffer = await processProjectScreenshotFile(file);
+    const saved = await saveProjectScreenshotBuffer({
+      userId,
+      projectId,
+      buffer,
+    });
+
+    imageUrls.push(saved.url);
   }
 
   return imageUrls;
 }
 
 export async function deleteProjectScreenshotFiles(imageUrls: string[]) {
-  await Promise.all(
-    imageUrls.map(async (imageUrl) => {
-      const filePath = toProjectScreenshotPath(imageUrl);
+  await deleteProjectScreenshotImageUrls(imageUrls);
+}
 
-      if (!filePath) {
-        return;
-      }
+export async function cleanupProjectScreenshotFiles(options: {
+  userId: string;
+  projectId: string;
+  imageUrls: string[];
+}) {
+  const uniqueUrls = [
+    ...new Set(options.imageUrls.map((url) => url.trim()).filter(Boolean)),
+  ];
 
-      try {
-        await unlink(filePath);
-      } catch (error) {
-        if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "ENOENT"
-        ) {
-          return;
-        }
+  if (uniqueUrls.length === 0) {
+    return;
+  }
 
-        throw error;
-      }
-    }),
-  );
+  for (const imageUrl of uniqueUrls) {
+    const ownershipMessage = validateProjectScreenshotManagedUrl({
+      userId: options.userId,
+      projectId: options.projectId,
+      url: imageUrl,
+    });
+
+    if (ownershipMessage) {
+      throw new Error(ownershipMessage);
+    }
+  }
+
+  const referencedUrls = await listReferencedProjectScreenshotUrls(uniqueUrls);
+
+  if (referencedUrls.length > 0) {
+    throw new Error("まだ参照中のスクリーンショットは cleanup できません。");
+  }
+
+  await deleteProjectScreenshotImageUrls(uniqueUrls);
 }

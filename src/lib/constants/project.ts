@@ -3,6 +3,10 @@ import type {
   ProjectStage,
   ProjectStatus,
 } from "$lib/shared/domain";
+export {
+  PROJECT_SCREENSHOT_MAX_COUNT,
+  PROJECT_SCREENSHOT_MAX_SOURCE_SIZE_BYTES as PROJECT_SCREENSHOT_MAX_SIZE_BYTES,
+} from "$lib/shared/media/config";
 
 export interface ProjectStatusInfo {
   label: string;
@@ -87,9 +91,6 @@ export interface ProjectHelpTypeInfo {
   label: string;
   description: string;
 }
-
-export const PROJECT_SCREENSHOT_MAX_COUNT = 5;
-export const PROJECT_SCREENSHOT_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
 export const PROJECT_HELP_TYPE_MAP: Record<
   ProjectHelpType,

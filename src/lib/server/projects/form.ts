@@ -2,6 +2,7 @@ import {
   getProjectPublishChecklist,
   type ProjectPublishChecklistItem,
 } from "$lib/constants/project";
+import { z } from "zod";
 import {
   createProjectInputSchema,
   type CreateProjectInput,
@@ -23,6 +24,8 @@ export type ProjectFormValues = {
   repoUrl: string;
   demoUrl: string;
   tags: string;
+  uploadedImagesJson: string;
+  draftProjectId: string;
   keptImagesJson: string;
   statusIntent: string;
 };
@@ -78,9 +81,15 @@ export function getProjectFormValues(formData: FormData): ProjectFormValues {
     repoUrl: getStringEntry(formData, "repoUrl"),
     demoUrl: getStringEntry(formData, "demoUrl"),
     tags: getStringEntry(formData, "tags"),
+    uploadedImagesJson: getStringEntry(formData, "uploadedImagesJson"),
+    draftProjectId: getStringEntry(formData, "draftProjectId"),
     keptImagesJson: getStringEntry(formData, "keptImagesJson"),
     statusIntent: getStringEntry(formData, "statusIntent"),
   };
+}
+
+export function validateProjectDraftId(value: string) {
+  return z.string().uuid().safeParse(value.trim());
 }
 
 export function resolveTargetStatus(
@@ -190,11 +199,10 @@ export function validateProjectFormValues(
     publicUrl: values.publicUrl,
     repoUrl: values.repoUrl,
     demoUrl: values.demoUrl,
-    images:
-      getChecklistImages(
-        context.existingImageCount ?? 0,
-        context.pendingImageCount ?? 0,
-      ),
+    images: getChecklistImages(
+      context.existingImageCount ?? 0,
+      context.pendingImageCount ?? 0,
+    ),
   });
 
   if (!parsed.success) {
@@ -214,11 +222,10 @@ export function validateProjectFormValues(
     publicUrl: parsed.data.publicUrl,
     repoUrl: parsed.data.repoUrl,
     demoUrl: parsed.data.demoUrl,
-    images:
-      getChecklistImages(
-        context.existingImageCount ?? 0,
-        context.pendingImageCount ?? 0,
-      ),
+    images: getChecklistImages(
+      context.existingImageCount ?? 0,
+      context.pendingImageCount ?? 0,
+    ),
   });
 
   if (
