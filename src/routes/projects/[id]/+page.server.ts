@@ -23,6 +23,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   }
 
   return {
+    canEdit: rawProject.ownerUserId === locals.user?.id,
     project,
   };
 };

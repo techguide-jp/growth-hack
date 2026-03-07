@@ -2,11 +2,12 @@
     import ProjectTabs from "$lib/components/projects/ProjectTabs.svelte";
     import SupportPanel from "$lib/components/projects/SupportPanel.svelte";
     import ReactionBar from "$lib/components/shared/ReactionBar.svelte";
-    import { Github, Globe, Calendar } from "lucide-svelte";
+    import { Github, Globe, Calendar, Pencil } from "lucide-svelte";
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
 
     export let data: {
+        canEdit: boolean;
         project: {
             id: string;
             ownerId: string;
@@ -88,6 +89,14 @@
                 </a>
 
                 <div class="flex gap-3">
+                    {#if data.canEdit}
+                        <a
+                            href="/projects/{project.id}/edit"
+                            class="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition"
+                        >
+                            <Pencil class="w-4 h-4" /> 編集
+                        </a>
+                    {/if}
                     {#if project.publicUrl}
                         <a
                             href={project.publicUrl}

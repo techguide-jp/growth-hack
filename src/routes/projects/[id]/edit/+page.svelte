@@ -6,6 +6,20 @@
 
     const statusKeys = Object.keys(PROJECT_STATUS_MAP) as ProjectStatus[];
 
+    export let data: {
+        project: {
+            id: string;
+            title: string;
+            summary: string;
+            description: string;
+            publicUrl?: string;
+            repoUrl?: string;
+            demoUrl?: string;
+            tags: string[];
+            status: ProjectStatus;
+        };
+    };
+
     export let form:
         | {
               message?: string;
@@ -22,13 +36,14 @@
           }
         | undefined;
 
-    let title = form?.values?.title ?? "";
-    let summary = form?.values?.summary ?? "";
-    let description = form?.values?.description ?? "";
-    let publicUrl = form?.values?.publicUrl ?? "";
-    let repoUrl = form?.values?.repoUrl ?? "";
+    let title = form?.values?.title ?? data.project.title;
+    let summary = form?.values?.summary ?? data.project.summary;
+    let description = form?.values?.description ?? data.project.description;
+    let publicUrl = form?.values?.publicUrl ?? data.project.publicUrl ?? "";
+    let repoUrl = form?.values?.repoUrl ?? data.project.repoUrl ?? "";
+    let demoUrl = form?.values?.demoUrl ?? data.project.demoUrl ?? "";
     let status: ProjectStatus =
-        (form?.values?.status as ProjectStatus | undefined) ?? "draft";
+        (form?.values?.status as ProjectStatus | undefined) ?? data.project.status;
     let isSubmitting = false;
 
     $: selectedStatus = getProjectStatusInfo(status);
@@ -36,16 +51,16 @@
 
 <div class="max-w-3xl mx-auto py-6">
     <a
-        href="/projects"
+        href="/projects/{data.project.id}"
         class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4"
     >
-        <ArrowLeft class="w-4 h-4" /> 一覧へ戻る
+        <ArrowLeft class="w-4 h-4" /> 詳細へ戻る
     </a>
 
     <section class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <h1 class="text-2xl font-bold text-gray-900">プロジェクトを作成</h1>
+        <h1 class="text-2xl font-bold text-gray-900">プロジェクトを編集</h1>
         <p class="text-sm text-gray-600 mt-2">
-            作品の内容を登録すると、ここから公開表示されるページが作成できます。
+            登録済みの内容を更新して、公開状態や紹介文を調整できます。
         </p>
 
         <form method="POST" class="mt-6 space-y-5" on:submit={() => (isSubmitting = true)}>
@@ -126,7 +141,7 @@
                     >
                     <ProjectTagInput
                         id="tags"
-                        initialValue={form?.values?.tags ?? ""}
+                        initialValue={form?.values?.tags ?? data.project.tags.join(",")}
                         placeholder="Svelte / TypeScript / デザイン"
                     />
                 </div>
@@ -163,6 +178,20 @@
                 </div>
             </div>
 
+            <div class="space-y-2">
+                <label class="block text-sm font-bold text-gray-700" for="demoUrl"
+                    >デモURL（任意）</label
+                >
+                <input
+                    id="demoUrl"
+                    name="demoUrl"
+                    type="url"
+                    bind:value={demoUrl}
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="https://demo.example.com"
+                />
+            </div>
+
             {#if form?.message}
                 <p class="text-sm text-red-600">{form.message}</p>
             {/if}
@@ -172,7 +201,7 @@
                 disabled={isSubmitting}
                 class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-                {isSubmitting ? "作成中..." : "プロジェクトを作成"}
+                {isSubmitting ? "更新中..." : "変更を保存"}
             </button>
         </form>
     </section>

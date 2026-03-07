@@ -9,7 +9,11 @@ import {
   tags,
   users,
 } from "$lib/server/db/schema";
-import type { CreateProjectInput, ProjectStatus } from "$lib/shared/domain";
+import type {
+  CreateProjectInput,
+  ProjectStatus,
+  UpdateProjectInput,
+} from "$lib/shared/domain";
 
 type ListProjectsOptions = {
   ownerUserId?: string;
@@ -248,6 +252,101 @@ export async function createProject(
             })),
           )
           .onConflictDoNothing();
+      }
+    }
+  });
+
+  return getProjectViewById(projectId);
+}
+
+export async function updateProject(
+  projectId: string,
+  input: UpdateProjectInput,
+) {
+  const db = getDb();
+  const now = new Date();
+  const updateValues: Partial<typeof projects.$inferInsert> = {
+    updatedAt: now,
+  };
+
+  if (input.title !== undefined) {
+    updateValues.title = input.title;
+  }
+
+  if (input.summary !== undefined) {
+    updateValues.summary = input.summary;
+  }
+
+  if (input.description !== undefined) {
+    updateValues.description = input.description;
+  }
+
+  if ("publicUrl" in input) {
+    updateValues.publicUrl = input.publicUrl ?? null;
+  }
+
+  if ("repoUrl" in input) {
+    updateValues.repoUrl = input.repoUrl ?? null;
+  }
+
+  if ("demoUrl" in input) {
+    updateValues.demoUrl = input.demoUrl ?? null;
+  }
+
+  if (input.status !== undefined) {
+    updateValues.status = input.status;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.update(projects).set(updateValues).where(eq(projects.id, projectId));
+
+    if (input.eventIds !== undefined) {
+      await tx.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
+
+      if (input.eventIds.length > 0) {
+        await tx
+          .insert(projectEvents)
+          .values(
+            input.eventIds.map((eventId) => ({
+              projectId,
+              eventId,
+            })),
+          )
+          .onConflictDoNothing();
+      }
+    }
+
+    if (input.tags !== undefined) {
+      await tx.delete(projectTags).where(eq(projectTags.projectId, projectId));
+
+      if (input.tags.length > 0) {
+        await tx
+          .insert(tags)
+          .values(
+            input.tags.map((name) => ({
+              id: crypto.randomUUID(),
+              name,
+              createdAt: now,
+            })),
+          )
+          .onConflictDoNothing();
+
+        const persistedTags = await tx
+          .select()
+          .from(tags)
+          .where(inArray(tags.name, input.tags));
+
+        if (persistedTags.length > 0) {
+          await tx
+            .insert(projectTags)
+            .values(
+              persistedTags.map((tag) => ({
+                projectId,
+                tagId: tag.id,
+              })),
+            )
+            .onConflictDoNothing();
+        }
       }
     }
   });
