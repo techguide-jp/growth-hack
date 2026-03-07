@@ -157,6 +157,26 @@
         return `スクリーンショットは${PROJECT_SCREENSHOT_MAX_COUNT}枚まで登録できます。`;
     }
 
+    function toUploadedImages(imageUrls: string[]) {
+        return imageUrls.map((imageUrl) => ({
+            id: imageUrl,
+            name: imageUrl.split("/").pop() ?? "uploaded.webp",
+            size: 0,
+            url: imageUrl,
+            previewUrl: imageUrl,
+            progress: 100,
+            status: "uploaded" as const,
+            previewIsObjectUrl: false,
+        }));
+    }
+
+    function hasSameItems(left: string[], right: string[]) {
+        return (
+            left.length === right.length &&
+            left.every((value, index) => value === right[index])
+        );
+    }
+
     const initialProject = project ?? {
         title: "",
         oneLiner: "",
@@ -202,18 +222,9 @@
     let tagsValue = form?.values?.tags ?? initialProject.tags.join(",");
     let keptImages =
         parseJsonStringArray(form?.values?.keptImagesJson) ?? initialProject.images;
-    let uploadedImages: UploadedImage[] = (
-        parseJsonStringArray(form?.values?.uploadedImagesJson) ?? []
-    ).map((imageUrl) => ({
-        id: imageUrl,
-        name: imageUrl.split("/").pop() ?? "uploaded.webp",
-        size: 0,
-        url: imageUrl,
-        previewUrl: imageUrl,
-        progress: 100,
-        status: "uploaded",
-        previewIsObjectUrl: false,
-    }));
+    let uploadedImages: UploadedImage[] = toUploadedImages(
+        parseJsonStringArray(form?.values?.uploadedImagesJson) ?? [],
+    );
     let localPreparedImages: LocalPreparedImage[] = [];
     let draftProjectId = form?.values?.draftProjectId ?? uploadContext.projectId;
     let screenshotInput: HTMLInputElement | undefined = undefined;
@@ -226,6 +237,7 @@
     let shouldDisableScreenshotActions = false;
     let hasScheduledLeaveCleanup = false;
     let currentUploadAbortController: AbortController | null = null;
+    let lastSyncedFormValues = form?.values;
     const screenshotSizeLimitInMb = Math.floor(
         PROJECT_SCREENSHOT_MAX_SIZE_BYTES / 1024 / 1024,
     );
@@ -509,6 +521,34 @@
     $: pendingUploadCount = uploadedImages.filter((image) => image.status === "uploading").length;
     $: localPendingFiles = localPreparedImages.map((image) => image.file);
     $: shouldDisableScreenshotActions = isPreparingScreenshots || pendingUploadCount > 0;
+    $: draftProjectId = form?.values?.draftProjectId ?? uploadContext.projectId;
+    $: if (form?.values && form.values !== lastSyncedFormValues) {
+        lastSyncedFormValues = form.values;
+
+        const nextKeptImages = parseJsonStringArray(form.values.keptImagesJson);
+
+        if (nextKeptImages && !hasSameItems(keptImages, nextKeptImages)) {
+            keptImages = nextKeptImages;
+        }
+
+        const nextUploadedImageUrls = parseJsonStringArray(
+            form.values.uploadedImagesJson,
+        );
+        const currentUploadedImageUrls = uploadedImages
+            .filter((image) => image.status === "uploaded")
+            .map((image) => image.url);
+
+        if (
+            nextUploadedImageUrls &&
+            !hasSameItems(currentUploadedImageUrls, nextUploadedImageUrls)
+        ) {
+            for (const image of uploadedImages) {
+                releaseUploadedImagePreview(image);
+            }
+
+            uploadedImages = toUploadedImages(nextUploadedImageUrls);
+        }
+    }
     $: publishChecklist = getProjectPublishChecklist({
         highlights,
         nextMilestone,
