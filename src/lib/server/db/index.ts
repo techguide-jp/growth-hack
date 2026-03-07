@@ -1,3 +1,4 @@
+import { dev } from "$app/environment";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { env } from "$env/dynamic/private";
@@ -15,7 +16,7 @@ export function hasDatabaseUrl() {
 }
 
 function isProductionLike() {
-  return env.NODE_ENV === "production" || env.APP_ENV === "production";
+  return !dev || env.APP_ENV === "production";
 }
 
 function getConfiguredDatabaseUrl() {
