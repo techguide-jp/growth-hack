@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildReactionSummary,
+  canLinkProjectToTimelinePost,
+  canViewerAccessProject,
   isTimelinePostIncludedInFollowingFeed,
   selectTimelineCommentPreview,
   validateTimelineSolveRequest,
@@ -121,6 +123,50 @@ describe("timeline repository helpers", () => {
         ["u1"],
         ["p1"],
       ),
+    ).toBe(false);
+  });
+
+  it("draft プロジェクトは所有者だけ参照でき、タイムライン紐付けは公開済みのみ許可する", () => {
+    expect(
+      canViewerAccessProject(
+        {
+          ownerUserId: "u1",
+          status: "published",
+        },
+        null,
+      ),
+    ).toBe(true);
+
+    expect(
+      canViewerAccessProject(
+        {
+          ownerUserId: "u1",
+          status: "draft",
+        },
+        "u1",
+      ),
+    ).toBe(true);
+
+    expect(
+      canViewerAccessProject(
+        {
+          ownerUserId: "u1",
+          status: "draft",
+        },
+        "u2",
+      ),
+    ).toBe(false);
+
+    expect(
+      canLinkProjectToTimelinePost({
+        status: "published",
+      }),
+    ).toBe(true);
+
+    expect(
+      canLinkProjectToTimelinePost({
+        status: "draft",
+      }),
     ).toBe(false);
   });
 

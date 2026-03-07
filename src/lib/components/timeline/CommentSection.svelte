@@ -32,6 +32,16 @@
     let errorMessage = "";
     let lastCommentsSignature = "";
 
+    function syncAcceptedComment(
+        value: TimelineCommentView[],
+        nextAcceptedCommentId: string | null,
+    ) {
+        return value.map((comment) => ({
+            ...comment,
+            isAccepted: comment.id === nextAcceptedCommentId,
+        }));
+    }
+
     function getCommentSignature(value: TimelineCommentView[]) {
         return value
             .map(
@@ -56,12 +66,25 @@
             !isLoadingAll &&
             !isSolving
         ) {
-            currentComments = comments.map((comment) => ({ ...comment }));
-            currentCommentCount = commentCount;
             localAcceptedCommentId = acceptedCommentId;
             localCanSolve = canSolve;
             hasLoadedAllComments = hasLoadedAllComments || hasFullComments;
             showAll = showAll || defaultShowAll || hasFullComments;
+
+            if (hasLoadedAllComments && !hasFullComments) {
+                currentComments = syncAcceptedComment(
+                    currentComments,
+                    acceptedCommentId,
+                );
+                currentCommentCount = Math.max(commentCount, currentComments.length);
+            } else {
+                currentComments = syncAcceptedComment(
+                    comments.map((comment) => ({ ...comment })),
+                    acceptedCommentId,
+                );
+                currentCommentCount = commentCount;
+            }
+
             lastCommentsSignature = nextSignature;
         }
     }
@@ -88,9 +111,12 @@
             );
         }
 
-        currentComments = (payload?.comments ?? []).map((comment) => ({
-            ...comment,
-        }));
+        currentComments = syncAcceptedComment(
+            (payload?.comments ?? []).map((comment) => ({
+                ...comment,
+            })),
+            localAcceptedCommentId,
+        );
         currentCommentCount = currentComments.length;
         hasLoadedAllComments = true;
         lastCommentsSignature = [
@@ -208,10 +234,7 @@
 
             localAcceptedCommentId = commentId;
             localCanSolve = false;
-            currentComments = currentComments.map((comment) => ({
-                ...comment,
-                isAccepted: comment.id === commentId,
-            }));
+            currentComments = syncAcceptedComment(currentComments, commentId);
 
             if (invalidateKey) {
                 await invalidate(invalidateKey);

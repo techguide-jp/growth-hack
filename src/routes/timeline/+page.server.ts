@@ -21,6 +21,7 @@ export const load: PageServerLoad = async (event) => {
     event.locals.user
       ? listProjects({
           ownerUserId: event.locals.user.id,
+          statuses: ["published"],
         })
       : Promise.resolve([]),
   ]);

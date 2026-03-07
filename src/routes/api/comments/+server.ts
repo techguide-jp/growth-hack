@@ -25,7 +25,7 @@ function jsonTimelineError(error: unknown) {
   return json({ message: "Internal Server Error" }, { status: 500 });
 }
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ locals, url }) => {
   const parsed = listCommentsQuerySchema.safeParse({
     targetId: url.searchParams.get("targetId"),
     targetType: url.searchParams.get("targetType"),
@@ -42,6 +42,7 @@ export const GET: RequestHandler = async ({ url }) => {
     const comments = await listCommentsForTarget(
       parsed.data.targetType,
       parsed.data.targetId,
+      locals.user?.id,
     );
 
     return json({

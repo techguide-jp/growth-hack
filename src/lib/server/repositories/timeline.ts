@@ -28,6 +28,7 @@ import {
 } from "$lib/shared/timeline";
 import { getProjectById } from "$lib/server/repositories/projects";
 
+type ProjectRecord = typeof projects.$inferSelect;
 type TimelinePostRecord = typeof timelinePosts.$inferSelect;
 type CommentRecord = typeof comments.$inferSelect;
 
@@ -56,6 +57,13 @@ type TimelineSolveValidationInput = {
   post: Pick<TimelinePostRecord, "authorUserId" | "id" | "type">;
   viewerUserId: string;
 };
+
+type ProjectVisibilityRecord = Pick<ProjectRecord, "ownerUserId" | "status">;
+
+type TimelineProjectRecord = Pick<
+  ProjectRecord,
+  "id" | "ownerUserId" | "status" | "title"
+>;
 
 export class TimelineRepositoryError extends Error {
   status: number;
@@ -89,6 +97,23 @@ function createTimelineAuthorFallback(userId: string) {
     displayName: "Unknown",
     avatarUrl: null,
   };
+}
+
+export function canViewerAccessProject(
+  project: ProjectVisibilityRecord | null,
+  viewerUserId?: string | null,
+) {
+  if (!project) {
+    return false;
+  }
+
+  return project.status === "published" || project.ownerUserId === viewerUserId;
+}
+
+export function canLinkProjectToTimelinePost(
+  project: Pick<ProjectRecord, "status"> | null,
+) {
+  return project?.status === "published";
 }
 
 export function buildReactionSummary(
@@ -264,6 +289,20 @@ function toCommentView(
   };
 }
 
+function toTimelineProjectSummary(
+  project: TimelineProjectRecord | null,
+  viewerUserId?: string | null,
+) {
+  if (!project || !canViewerAccessProject(project, viewerUserId)) {
+    return null;
+  }
+
+  return {
+    id: project.id,
+    title: project.title,
+  };
+}
+
 async function buildTimelinePostViews(
   postRows: TimelinePostRecord[],
   options: {
@@ -298,6 +337,8 @@ async function buildTimelinePostViews(
         ? db
             .select({
               id: projects.id,
+              ownerUserId: projects.ownerUserId,
+              status: projects.status,
               title: projects.title,
             })
             .from(projects)
@@ -393,12 +434,7 @@ async function buildTimelinePostViews(
         displayName: author.displayName,
         avatarUrl: author.avatarUrl,
       },
-      project: project
-        ? {
-            id: project.id,
-            title: project.title,
-          }
-        : null,
+      project: toTimelineProjectSummary(project, options.viewerUserId),
       commentCount: commentViews.length,
       commentsPreview: selectTimelineCommentPreview(commentViews),
       comments: options.includeFullComments ? commentViews : [],
@@ -426,6 +462,19 @@ async function getUpdateById(updateId: string) {
   return update ?? null;
 }
 
+async function getAccessibleProjectById(
+  projectId: string,
+  viewerUserId?: string | null,
+) {
+  const project = await getProjectById(projectId);
+
+  if (!canViewerAccessProject(project, viewerUserId)) {
+    return null;
+  }
+
+  return project;
+}
+
 export async function getTimelinePostById(postId: string) {
   const db = getDb();
   const [post] = await db
@@ -451,10 +500,11 @@ export async function getCommentById(commentId: string) {
 async function assertCommentTargetExists(
   targetType: CommentTargetType,
   targetId: string,
+  viewerUserId?: string | null,
 ) {
   switch (targetType) {
     case "project": {
-      const project = await getProjectById(targetId);
+      const project = await getAccessibleProjectById(targetId, viewerUserId);
 
       if (!project) {
         throw new TimelineRepositoryError(
@@ -468,7 +518,10 @@ async function assertCommentTargetExists(
     case "update": {
       const update = await getUpdateById(targetId);
 
-      if (!update) {
+      if (
+        !update ||
+        !(await getAccessibleProjectById(update.projectId, viewerUserId))
+      ) {
         throw new TimelineRepositoryError(
           404,
           "コメント対象の更新投稿が見つかりません。",
@@ -495,6 +548,7 @@ async function assertCommentTargetExists(
 async function assertReactionTargetExists(
   targetType: ReactionTargetType,
   targetId: string,
+  viewerUserId?: string | null,
 ) {
   switch (targetType) {
     case "comment": {
@@ -507,12 +561,17 @@ async function assertReactionTargetExists(
         );
       }
 
+      await assertCommentTargetExists(
+        comment.targetType,
+        comment.targetId,
+        viewerUserId,
+      );
       return;
     }
     case "project":
     case "update":
     case "timeline_post":
-      return assertCommentTargetExists(targetType, targetId);
+      return assertCommentTargetExists(targetType, targetId, viewerUserId);
   }
 }
 
@@ -601,6 +660,7 @@ export async function getTimelinePostViewById(
 export async function listCommentsForTarget(
   targetType: CommentTargetType,
   targetId: string,
+  viewerUserId?: string | null,
 ) {
   const db = getDb();
   let acceptedCommentId: string | null = null;
@@ -617,7 +677,7 @@ export async function listCommentsForTarget(
 
     acceptedCommentId = post.acceptedCommentId ?? null;
   } else {
-    await assertCommentTargetExists(targetType, targetId);
+    await assertCommentTargetExists(targetType, targetId, viewerUserId);
   }
 
   const rows = await db
@@ -646,7 +706,7 @@ export async function listReactionSummaryForTarget(
   targetId: string,
   viewerUserId?: string | null,
 ) {
-  await assertReactionTargetExists(targetType, targetId);
+  await assertReactionTargetExists(targetType, targetId, viewerUserId);
   const db = getDb();
   const rows = await db
     .select({
@@ -679,6 +739,13 @@ export async function createTimelinePost(
       throw new TimelineRepositoryError(
         404,
         "関連付けるプロジェクトが見つかりません。",
+      );
+    }
+
+    if (!canLinkProjectToTimelinePost(project)) {
+      throw new TimelineRepositoryError(
+        400,
+        "公開中のプロジェクトのみ関連付けできます。",
       );
     }
   }
@@ -717,7 +784,7 @@ export async function createComment(
   const commentId = crypto.randomUUID();
   const now = new Date();
 
-  await assertCommentTargetExists(input.targetType, input.targetId);
+  await assertCommentTargetExists(input.targetType, input.targetId, authorUserId);
 
   await db.insert(comments).values({
     id: commentId,
@@ -752,7 +819,7 @@ export async function addReaction(
 ) {
   const db = getDb();
 
-  await assertReactionTargetExists(targetType, targetId);
+  await assertReactionTargetExists(targetType, targetId, userId);
 
   await db
     .insert(reactions)
@@ -776,7 +843,7 @@ export async function removeReaction(
 ) {
   const db = getDb();
 
-  await assertReactionTargetExists(targetType, targetId);
+  await assertReactionTargetExists(targetType, targetId, userId);
 
   await db
     .delete(reactions)
