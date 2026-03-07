@@ -12,6 +12,7 @@ import {
   resolveTargetStatus,
   validateProjectFormValues,
 } from "$lib/server/projects/form";
+import { resolveProjectSuccessToast } from "$lib/shared/project-form";
 import {
   getProjectScreenshotFiles,
   parseKeptProjectScreenshotUrls,
@@ -75,7 +76,10 @@ export const actions: Actions = {
 
     if (screenshotMessage) {
       return fail(400, {
-        message: screenshotMessage,
+        errors: {
+          screenshots: [screenshotMessage],
+        },
+        firstErrorField: "screenshots",
         values: {
           ...values,
           keptImagesJson: JSON.stringify(keptImageUrls),
@@ -93,7 +97,10 @@ export const actions: Actions = {
 
     if (!validatedUploadedImageUrls.success) {
       return fail(400, {
-        message: validatedUploadedImageUrls.message,
+        errors: {
+          screenshots: [validatedUploadedImageUrls.message],
+        },
+        firstErrorField: "screenshots",
         values: {
           ...values,
           keptImagesJson: JSON.stringify(keptImageUrls),
@@ -117,6 +124,8 @@ export const actions: Actions = {
     if (!result.success) {
       return fail(400, {
         message: result.message,
+        errors: result.errors,
+        firstErrorField: result.firstErrorField,
         values: {
           ...values,
           keptImagesJson: JSON.stringify(keptImageUrls),
@@ -147,6 +156,16 @@ export const actions: Actions = {
       });
     }
 
-    throw redirect(303, `/projects/${project.id}`);
+    const successToast = resolveProjectSuccessToast({
+      mode: "edit",
+      statusIntent: values.statusIntent,
+      targetStatus,
+      currentStatus: currentProject.status,
+    });
+    const searchParams = new URLSearchParams({
+      toast: successToast,
+    });
+
+    throw redirect(303, `/projects/${project.id}?${searchParams.toString()}`);
   },
 };

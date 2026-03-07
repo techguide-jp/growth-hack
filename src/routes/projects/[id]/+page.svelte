@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { browser } from "$app/environment";
     import ProjectTabs from "$lib/components/projects/ProjectTabs.svelte";
     import SupportPanel from "$lib/components/projects/SupportPanel.svelte";
     import ReactionBar from "$lib/components/shared/ReactionBar.svelte";
@@ -14,17 +15,26 @@
         ProjectStatus,
     } from "$lib/shared/domain";
     import {
+        getProjectSuccessToastMessage,
+        type ProjectSuccessToast,
+    } from "$lib/shared/project-form";
+    import {
         Github,
         Globe,
         Calendar,
         Pencil,
         ArrowRight,
+        CheckCircle2,
+        X,
     } from "lucide-svelte";
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
+    import { onDestroy, onMount } from "svelte";
+    import { fly } from "svelte/transition";
 
     export let data: {
         canEdit: boolean;
+        successToast: ProjectSuccessToast | null;
         project: {
             id: string;
             ownerId: string;
@@ -54,6 +64,38 @@
     const project = data.project;
     let activeTab = "overview";
     let activeImageIndex = 0;
+    let toastMessage = "";
+    let showToast = false;
+    let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function clearToastTimer() {
+        if (toastTimer) {
+            clearTimeout(toastTimer);
+            toastTimer = null;
+        }
+    }
+
+    function dismissToast() {
+        showToast = false;
+        clearToastTimer();
+    }
+
+    function removeToastSearchParam() {
+        if (!browser) {
+            return;
+        }
+
+        const url = new URL(window.location.href);
+
+        if (!url.searchParams.has("toast")) {
+            return;
+        }
+
+        url.searchParams.delete("toast");
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState(window.history.state, "", nextUrl);
+    }
+
     $: statusInfo = getProjectStatusInfo(project.status);
     $: stageInfo = getProjectStageInfo(project.projectStage);
     $: helpTypeInfo = project.helpTypes.map((helpType) => ({
@@ -75,7 +117,53 @@
         images: project.images,
     });
     $: showOwnerChecklist = data.canEdit && !publishChecklist.every((item) => item.complete);
+
+    onMount(() => {
+        if (!data.successToast) {
+            return;
+        }
+
+        toastMessage = getProjectSuccessToastMessage(data.successToast);
+        showToast = true;
+        removeToastSearchParam();
+        clearToastTimer();
+        toastTimer = setTimeout(() => {
+            showToast = false;
+            toastTimer = null;
+        }, 4000);
+    });
+
+    onDestroy(() => {
+        clearToastTimer();
+    });
 </script>
+
+{#if showToast}
+    <div
+        class="fixed right-4 top-20 z-[60] w-[min(24rem,calc(100vw-2rem))]"
+        transition:fly={{ y: -12, duration: 180 }}
+    >
+        <div
+            class="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-lg shadow-emerald-100/60"
+            role="status"
+            aria-live="polite"
+        >
+            <CheckCircle2 class="mt-0.5 h-5 w-5 text-emerald-600" />
+            <div class="min-w-0 flex-1">
+                <div class="text-sm font-bold text-gray-900">保存完了</div>
+                <p class="mt-1 text-sm text-gray-600">{toastMessage}</p>
+            </div>
+            <button
+                type="button"
+                class="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="トーストを閉じる"
+                on:click={dismissToast}
+            >
+                <X class="h-4 w-4" />
+            </button>
+        </div>
+    </div>
+{/if}
 
 <div class="bg-white border-b border-gray-200 -mt-8 mb-8 pb-8 pt-12">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">

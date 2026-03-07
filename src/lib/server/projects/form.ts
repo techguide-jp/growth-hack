@@ -8,27 +8,12 @@ import {
   type CreateProjectInput,
   type ProjectStatus,
 } from "$lib/shared/domain";
-
-export type ProjectFormValues = {
-  title: string;
-  oneLiner: string;
-  problemStatement: string;
-  projectStage: string;
-  helpTypes: string;
-  helpRequest: string;
-  highlights: string;
-  nextMilestone: string;
-  feedbackRequest: string;
-  backgroundNote: string;
-  publicUrl: string;
-  repoUrl: string;
-  demoUrl: string;
-  tags: string;
-  uploadedImagesJson: string;
-  draftProjectId: string;
-  keptImagesJson: string;
-  statusIntent: string;
-};
+import {
+  PROJECT_FORM_ERROR_FIELD_ORDER,
+  type ProjectFormErrorField,
+  type ProjectFormErrors,
+  type ProjectFormValues,
+} from "$lib/shared/project-form";
 
 type ProjectValidationContext = {
   targetStatus: ProjectStatus;
@@ -45,8 +30,10 @@ type ValidationResult =
     }
   | {
       success: false;
-      message: string;
+      errors: ProjectFormErrors;
+      firstErrorField: ProjectFormErrorField | null;
       checklist: ProjectPublishChecklistItem[];
+      message?: string;
     };
 
 function getStringEntry(formData: FormData, key: string) {
@@ -123,36 +110,133 @@ export function getLegacyProjectFoundationGap(project: {
   );
 }
 
-function getFoundationRequirementMessage(input: CreateProjectInput) {
-  if (!input.problemStatement) {
-    return "誰のどんな課題を解決するかを入力してください。";
-  }
+const projectFormErrorFieldSet = new Set<ProjectFormErrorField>(
+  PROJECT_FORM_ERROR_FIELD_ORDER,
+);
 
-  if (!input.projectStage) {
-    return "現在のステージを選択してください。";
-  }
-
-  if (input.helpTypes.length === 0) {
-    return "今いちばん欲しい協力を1つ以上選択してください。";
-  }
-
-  if (!input.helpRequest) {
-    return "協力してほしい具体的な内容を入力してください。";
-  }
-
-  return null;
+function isProjectFormErrorField(value: string): value is ProjectFormErrorField {
+  return projectFormErrorFieldSet.has(value as ProjectFormErrorField);
 }
 
-function getPublishRequirementMessage(
-  checklist: ProjectPublishChecklistItem[],
+function addProjectFormError(
+  errors: ProjectFormErrors,
+  field: ProjectFormErrorField,
+  message: string,
 ) {
-  const missing = checklist.find((item) => !item.complete);
+  const current = errors[field] ?? [];
 
-  if (!missing) {
+  if (current.includes(message)) {
+    return;
+  }
+
+  errors[field] = [...current, message];
+}
+
+export function getFirstProjectFormErrorField(errors: ProjectFormErrors) {
+  return (
+    PROJECT_FORM_ERROR_FIELD_ORDER.find((field) => {
+      const fieldErrors = errors[field];
+      return Array.isArray(fieldErrors) && fieldErrors.length > 0;
+    }) ?? null
+  );
+}
+
+function mapIssuePathToProjectFormField(
+  path: readonly PropertyKey[],
+): ProjectFormErrorField | null {
+  const [candidate] = path;
+
+  if (typeof candidate !== "string" || !isProjectFormErrorField(candidate)) {
     return null;
   }
 
-  return `公開前チェックが未完了です。「${missing.label}」を埋めてください。`;
+  return candidate;
+}
+
+function addFoundationRequirementErrors(
+  values: ProjectFormValues,
+  errors: ProjectFormErrors,
+) {
+  if (values.problemStatement.trim().length === 0) {
+    addProjectFormError(
+      errors,
+      "problemStatement",
+      "誰のどんな課題を解決するかを入力してください。",
+    );
+  }
+
+  if (values.projectStage.trim().length === 0) {
+    addProjectFormError(
+      errors,
+      "projectStage",
+      "現在のステージを選択してください。",
+    );
+  }
+
+  if (parseDelimitedValues(values.helpTypes).length === 0) {
+    addProjectFormError(
+      errors,
+      "helpTypes",
+      "今いちばん欲しい協力を1つ以上選択してください。",
+    );
+  }
+
+  if (values.helpRequest.trim().length === 0) {
+    addProjectFormError(
+      errors,
+      "helpRequest",
+      "協力してほしい具体的な内容を入力してください。",
+    );
+  }
+}
+
+function addPublishRequirementErrors(
+  checklist: ProjectPublishChecklistItem[],
+  errors: ProjectFormErrors,
+) {
+  for (const item of checklist) {
+    if (item.complete) {
+      continue;
+    }
+
+    switch (item.id) {
+      case "highlights":
+        addProjectFormError(
+          errors,
+          "highlights",
+          "できること・見どころを1〜3件入力してください。",
+        );
+        break;
+      case "nextMilestone":
+        addProjectFormError(
+          errors,
+          "nextMilestone",
+          "次のマイルストーンを入力してください。",
+        );
+        break;
+      case "feedbackRequest":
+        addProjectFormError(
+          errors,
+          "feedbackRequest",
+          "見てほしい点 / フィードバックが欲しい点を入力してください。",
+        );
+        break;
+      case "tags":
+        addProjectFormError(
+          errors,
+          "tags",
+          "タグを2〜5件入力してください。",
+        );
+        break;
+      case "assets":
+        addProjectFormError(
+          errors,
+          "assets",
+          "公開URL・GitHub URL・デモURL・スクリーンショットのいずれか1つを追加してください。",
+        );
+        break;
+    }
+  }
 }
 
 function getChecklistImages(
@@ -172,6 +256,7 @@ export function validateProjectFormValues(
   values: ProjectFormValues,
   context: ProjectValidationContext,
 ): ValidationResult {
+  const errors: ProjectFormErrors = {};
   const parsed = createProjectInputSchema.safeParse({
     title: values.title,
     oneLiner: values.oneLiner,
@@ -206,53 +291,58 @@ export function validateProjectFormValues(
   });
 
   if (!parsed.success) {
-    return {
-      success: false,
-      message:
-        parsed.error.issues[0]?.message ?? "入力内容を確認してください。",
-      checklist: fallbackChecklist,
-    };
+    for (const issue of parsed.error.issues) {
+      const field = mapIssuePathToProjectFormField(issue.path);
+
+      if (field) {
+        addProjectFormError(errors, field, issue.message);
+      }
+    }
   }
 
-  const checklist = getProjectPublishChecklist({
-    highlights: parsed.data.highlights,
-    nextMilestone: parsed.data.nextMilestone,
-    feedbackRequest: parsed.data.feedbackRequest,
-    tags: parsed.data.tags,
-    publicUrl: parsed.data.publicUrl,
-    repoUrl: parsed.data.repoUrl,
-    demoUrl: parsed.data.demoUrl,
-    images: getChecklistImages(
-      context.existingImageCount ?? 0,
-      context.pendingImageCount ?? 0,
-    ),
-  });
+  const checklist = parsed.success
+    ? getProjectPublishChecklist({
+        highlights: parsed.data.highlights,
+        nextMilestone: parsed.data.nextMilestone,
+        feedbackRequest: parsed.data.feedbackRequest,
+        tags: parsed.data.tags,
+        publicUrl: parsed.data.publicUrl,
+        repoUrl: parsed.data.repoUrl,
+        demoUrl: parsed.data.demoUrl,
+        images: getChecklistImages(
+          context.existingImageCount ?? 0,
+          context.pendingImageCount ?? 0,
+        ),
+      })
+    : fallbackChecklist;
 
   if (
     context.targetStatus === "published" &&
     context.currentStatus !== "published"
   ) {
-    const foundationRequirementMessage = getFoundationRequirementMessage(
-      parsed.data,
-    );
+    addFoundationRequirementErrors(values, errors);
+    addPublishRequirementErrors(checklist, errors);
+  }
 
-    if (foundationRequirementMessage) {
-      return {
-        success: false,
-        message: foundationRequirementMessage,
-        checklist,
-      };
-    }
+  const firstErrorField = getFirstProjectFormErrorField(errors);
 
-    const publishRequirementMessage = getPublishRequirementMessage(checklist);
+  if (firstErrorField) {
+    return {
+      success: false,
+      errors,
+      firstErrorField,
+      checklist,
+    };
+  }
 
-    if (publishRequirementMessage) {
-      return {
-        success: false,
-        message: publishRequirementMessage,
-        checklist,
-      };
-    }
+  if (!parsed.success) {
+    return {
+      success: false,
+      errors,
+      firstErrorField: null,
+      checklist,
+      message: parsed.error.issues[0]?.message ?? "入力内容を確認してください。",
+    };
   }
 
   return {

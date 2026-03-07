@@ -9,6 +9,8 @@
         "入力して Enter で追加。不要な項目はチップ右の × で削除できます。";
     export let emptyStateLabel = "項目を追加";
     export let maxItems = 20;
+    export let invalid = false;
+    export let describedBy: string | undefined = undefined;
 
     let tagInput = "";
     let isComposing = false;
@@ -94,7 +96,9 @@
 
 <div class="space-y-2">
     <div
-        class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500"
+        class="flex flex-wrap items-center gap-2 rounded-lg border bg-white px-4 py-3 {invalid
+            ? 'border-rose-300 focus-within:border-rose-400 focus-within:ring-1 focus-within:ring-rose-300'
+            : 'border-gray-300 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500'}"
     >
         {#each tags as tag (tag)}
             <span
@@ -119,6 +123,8 @@
             class="min-w-[10rem] flex-1 border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
             placeholder={tags.length === 0 ? placeholder : emptyStateLabel}
             disabled={tags.length >= maxItems}
+            aria-invalid={invalid}
+            aria-describedby={describedBy}
             on:keydown={handleKeydown}
             on:blur={handleBlur}
             on:compositionstart={() => (isComposing = true)}

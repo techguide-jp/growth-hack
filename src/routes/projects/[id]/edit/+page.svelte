@@ -1,6 +1,7 @@
 <script lang="ts">
     import ProjectEditorForm from "$lib/components/projects/ProjectEditorForm.svelte";
     import type { MediaStorageDriver } from "$lib/shared/media/config";
+    import type { ProjectFormSubmissionState } from "$lib/shared/project-form";
     import type {
         ProjectHelpType,
         ProjectStage,
@@ -35,31 +36,7 @@
         };
     };
 
-    export let form:
-        | {
-              message?: string;
-              values?: {
-                  title?: string;
-                  oneLiner?: string;
-                  problemStatement?: string;
-                  projectStage?: string;
-                  helpTypes?: string;
-                  helpRequest?: string;
-                  highlights?: string;
-                  nextMilestone?: string;
-                  feedbackRequest?: string;
-                  backgroundNote?: string;
-                  publicUrl?: string;
-                  repoUrl?: string;
-                  demoUrl?: string;
-                  tags?: string;
-                  keptImagesJson?: string;
-                  uploadedImagesJson?: string;
-                  draftProjectId?: string;
-                  statusIntent?: string;
-              };
-          }
-        | undefined;
+    export let form: ProjectFormSubmissionState | undefined;
 </script>
 
 <div class="max-w-5xl mx-auto py-6">

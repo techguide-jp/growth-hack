@@ -5,6 +5,8 @@
     export let name = "helpTypes";
     export let value: ProjectHelpType[] = [];
     export let maxSelections = 3;
+    export let invalid = false;
+    export let describedBy: string | undefined = undefined;
 
     function toggle(option: ProjectHelpType) {
         if (value.includes(option)) {
@@ -21,7 +23,11 @@
 </script>
 
 <div class="space-y-3">
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div
+        class="grid grid-cols-1 gap-3 rounded-2xl {invalid
+            ? 'border border-rose-300 bg-rose-50/40 p-3'
+            : 'border border-transparent'} sm:grid-cols-2"
+    >
         {#each PROJECT_HELP_TYPE_OPTIONS as option}
             {@const selected = value.includes(option.value)}
             {@const disabled = !selected && value.length >= maxSelections}
@@ -51,7 +57,13 @@
         {/each}
     </div>
 
-    <input type="hidden" {name} value={value.join(",")} />
+    <input
+        type="hidden"
+        {name}
+        value={value.join(",")}
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
+    />
 
     <p class="text-xs text-gray-500">
         今いちばん欲しい協力を1〜3件まで選択できます。

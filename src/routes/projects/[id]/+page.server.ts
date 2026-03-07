@@ -4,8 +4,12 @@ import {
   getProjectById,
   getProjectViewById,
 } from "$lib/server/repositories/projects";
+import {
+  isProjectSuccessToast,
+  type ProjectSuccessToast,
+} from "$lib/shared/project-form";
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
   const rawProject = await getProjectById(params.id);
 
   if (!rawProject) {
@@ -25,8 +29,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     throw error(404, "プロジェクトが見つかりません。");
   }
 
+  const toastParam = url.searchParams.get("toast");
+  const successToast: ProjectSuccessToast | null = isProjectSuccessToast(
+    toastParam,
+  )
+    ? toastParam
+    : null;
+
   return {
     canEdit: rawProject.ownerUserId === locals.user?.id,
     project,
+    successToast,
   };
 };

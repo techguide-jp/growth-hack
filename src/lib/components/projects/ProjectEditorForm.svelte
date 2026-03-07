@@ -1,6 +1,7 @@
 <script lang="ts">
     import { upload } from "@vercel/blob/client";
     import { browser } from "$app/environment";
+    import ProjectFieldErrors from "$lib/components/projects/ProjectFieldErrors.svelte";
     import ProjectHelpTypePicker from "$lib/components/projects/ProjectHelpTypePicker.svelte";
     import ProjectTagInput from "$lib/components/projects/ProjectTagInput.svelte";
     import {
@@ -25,28 +26,12 @@
         ProjectStage,
         ProjectStatus,
     } from "$lib/shared/domain";
-    import { onDestroy, onMount } from "svelte";
-
-    type FormValues = {
-        title?: string;
-        oneLiner?: string;
-        problemStatement?: string;
-        projectStage?: string;
-        helpTypes?: string;
-        helpRequest?: string;
-        highlights?: string;
-        nextMilestone?: string;
-        feedbackRequest?: string;
-        backgroundNote?: string;
-        publicUrl?: string;
-        repoUrl?: string;
-        demoUrl?: string;
-        tags?: string;
-        keptImagesJson?: string;
-        uploadedImagesJson?: string;
-        draftProjectId?: string;
-        statusIntent?: string;
-    };
+    import {
+        hasProjectFormErrors,
+        type ProjectFormErrorField,
+        type ProjectFormSubmissionState,
+    } from "$lib/shared/project-form";
+    import { onDestroy, onMount, tick } from "svelte";
 
     type MediaUploadContext = {
         driver: MediaStorageDriver;
@@ -93,12 +78,7 @@
     };
 
     export let mode: "create" | "edit";
-    export let form:
-        | {
-              message?: string;
-              values?: FormValues;
-          }
-        | undefined;
+    export let form: ProjectFormSubmissionState | undefined;
     export let project: EditorProject | undefined = undefined;
     export let uploadContext: MediaUploadContext;
 
@@ -155,6 +135,24 @@
 
     function getImageCountLimitMessage() {
         return `スクリーンショットは${PROJECT_SCREENSHOT_MAX_COUNT}枚まで登録できます。`;
+    }
+
+    function getFieldErrors(field: ProjectFormErrorField) {
+        return form?.errors?.[field] ?? [];
+    }
+
+    function hasFieldErrors(field: ProjectFormErrorField) {
+        return getFieldErrors(field).length > 0;
+    }
+
+    function getFieldErrorId(field: ProjectFormErrorField) {
+        return `project-form-error-${field}`;
+    }
+
+    function getInputClass(field: ProjectFormErrorField, baseClass: string) {
+        return `${baseClass} ${hasFieldErrors(field)
+            ? "border-rose-300 focus:border-rose-400 focus:ring-rose-300"
+            : "border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"}`;
     }
 
     function toUploadedImages(imageUrls: string[]) {
@@ -227,6 +225,8 @@
     );
     let localPreparedImages: LocalPreparedImage[] = [];
     let draftProjectId = form?.values?.draftProjectId ?? uploadContext.projectId;
+    let projectStageField: HTMLDivElement | undefined = undefined;
+    let helpTypesField: HTMLDivElement | undefined = undefined;
     let screenshotInput: HTMLInputElement | undefined = undefined;
     let isSubmitting = false;
     let isPreparingScreenshots = false;
@@ -238,9 +238,81 @@
     let hasScheduledLeaveCleanup = false;
     let currentUploadAbortController: AbortController | null = null;
     let lastSyncedFormValues = form?.values;
+    let submittedStatusIntent =
+        form?.values?.statusIntent ?? (mode === "create" ? "draft" : "keep");
+    let statusIntentInput: HTMLInputElement | undefined = undefined;
+    let lastFocusedErrorKey = "";
     const screenshotSizeLimitInMb = Math.floor(
         PROJECT_SCREENSHOT_MAX_SIZE_BYTES / 1024 / 1024,
     );
+
+    function setSubmittedStatusIntent(nextStatusIntent: string) {
+        submittedStatusIntent = nextStatusIntent;
+
+        if (statusIntentInput) {
+            statusIntentInput.value = nextStatusIntent;
+        }
+    }
+
+    function handleSubmit(event: SubmitEvent) {
+        const submitter = event.submitter;
+
+        if (submitter instanceof HTMLButtonElement) {
+            const nextStatusIntent = submitter.dataset.statusIntent;
+
+            if (nextStatusIntent) {
+                setSubmittedStatusIntent(nextStatusIntent);
+            }
+        }
+
+        isSubmitting = true;
+    }
+
+    function getFocusTarget(field: ProjectFormErrorField) {
+        if (!browser) {
+            return null;
+        }
+
+        if (field === "projectStage") {
+            return (
+                projectStageField?.querySelector<HTMLElement>('button[aria-pressed="true"]') ??
+                projectStageField?.querySelector<HTMLElement>("button") ??
+                null
+            );
+        }
+
+        if (field === "helpTypes") {
+            return (
+                helpTypesField?.querySelector<HTMLElement>('button[aria-pressed="true"]') ??
+                helpTypesField?.querySelector<HTMLElement>("button") ??
+                null
+            );
+        }
+
+        const targetId = field === "assets" ? "publicUrl" : field;
+        const target = document.getElementById(targetId);
+
+        return target instanceof HTMLElement ? target : null;
+    }
+
+    async function focusFirstErrorField(field: ProjectFormErrorField) {
+        await tick();
+
+        const target = getFocusTarget(field);
+
+        if (!target) {
+            return;
+        }
+
+        if ("focus" in target) {
+            target.focus({ preventScroll: true });
+        }
+
+        target.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+        });
+    }
 
     function releaseLocalPreparedImages(images: LocalPreparedImage[]) {
         for (const image of images) {
@@ -522,8 +594,13 @@
     $: localPendingFiles = localPreparedImages.map((image) => image.file);
     $: shouldDisableScreenshotActions = isPreparingScreenshots || pendingUploadCount > 0;
     $: draftProjectId = form?.values?.draftProjectId ?? uploadContext.projectId;
+    $: hasFieldLevelErrors = hasProjectFormErrors(form?.errors);
     $: if (form?.values && form.values !== lastSyncedFormValues) {
         lastSyncedFormValues = form.values;
+
+        if (form.values.statusIntent) {
+            setSubmittedStatusIntent(form.values.statusIntent);
+        }
 
         const nextKeptImages = parseJsonStringArray(form.values.keptImagesJson);
 
@@ -569,6 +646,17 @@
         mode === "edit" &&
         initialProject.status === "published" &&
         !publishReady;
+    $: if (browser && form?.firstErrorField) {
+        const nextErrorKey = JSON.stringify({
+            firstErrorField: form.firstErrorField,
+            errors: form.errors,
+        });
+
+        if (nextErrorKey !== lastFocusedErrorKey) {
+            lastFocusedErrorKey = nextErrorKey;
+            void focusFirstErrorField(form.firstErrorField);
+        }
+    }
     $: if (browser) {
         syncScreenshotInputFiles();
     }
@@ -606,8 +694,9 @@
 <form
     method="POST"
     enctype="multipart/form-data"
+    novalidate
     class="space-y-8"
-    on:submit={() => (isSubmitting = true)}
+    on:submit={handleSubmit}
 >
     <section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <div class="mb-6">
@@ -632,8 +721,19 @@
                     name="title"
                     bind:value={title}
                     required={mode === "create"}
-                    class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("title")}
+                    aria-describedby={hasFieldErrors("title")
+                        ? getFieldErrorId("title")
+                        : undefined}
+                    class={getInputClass(
+                        "title",
+                        "w-full rounded-lg border px-4 py-2",
+                    )}
                     placeholder="例: Growth Hach"
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("title")}
+                    errors={getFieldErrors("title")}
                 />
             </div>
 
@@ -649,10 +749,21 @@
                     name="oneLiner"
                     bind:value={oneLiner}
                     required={mode === "create"}
-                    class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("oneLiner")}
+                    aria-describedby={hasFieldErrors("oneLiner")
+                        ? getFieldErrorId("oneLiner")
+                        : undefined}
+                    class={getInputClass(
+                        "oneLiner",
+                        "w-full rounded-lg border px-4 py-2",
+                    )}
                     placeholder="例: ハッカソン作品の継続開発を支えるコミュニティ基盤"
                 />
                 <p class="text-xs text-gray-500">一覧カードで最初に見える一文です。下書きでは短くても保存できます。</p>
+                <ProjectFieldErrors
+                    id={getFieldErrorId("oneLiner")}
+                    errors={getFieldErrors("oneLiner")}
+                />
             </div>
 
             <div class="space-y-2">
@@ -667,23 +778,39 @@
                     name="problemStatement"
                     bind:value={problemStatement}
                     rows="4"
-                    class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("problemStatement")}
+                    aria-describedby={hasFieldErrors("problemStatement")
+                        ? getFieldErrorId("problemStatement")
+                        : undefined}
+                    class={getInputClass(
+                        "problemStatement",
+                        "w-full rounded-lg border px-4 py-3",
+                    )}
                     placeholder="誰が困っていて、その人の何をどう良くするのかを具体的に書いてください。"
                 ></textarea>
                 <p class="text-xs text-gray-500">下書きでは短くても保存できます。公開前に、支援先が伝わる粒度まで整えてください。</p>
+                <ProjectFieldErrors
+                    id={getFieldErrorId("problemStatement")}
+                    errors={getFieldErrors("problemStatement")}
+                />
             </div>
 
-            <div class="space-y-3">
+            <div class="space-y-3" bind:this={projectStageField}>
                 <div class="block text-sm font-bold text-gray-700">
                     現在のステージ
                 </div>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div
+                    class="grid grid-cols-1 gap-3 sm:grid-cols-2 {hasFieldErrors('projectStage')
+                        ? 'rounded-2xl border border-rose-300 bg-rose-50/40 p-3'
+                        : ''}"
+                >
                     {#each stageOptions as option}
                         <button
                             type="button"
                             class="rounded-xl border p-4 text-left transition {projectStage === option.value
                                 ? 'border-indigo-500 bg-indigo-50 shadow-sm'
                                 : 'border-gray-200 bg-white hover:border-gray-300'}"
+                            aria-pressed={projectStage === option.value}
                             on:click={() => (projectStage = option.value)}
                         >
                             <div class="font-bold text-gray-900">{option.label}</div>
@@ -691,15 +818,37 @@
                         </button>
                     {/each}
                 </div>
-                <input type="hidden" name="projectStage" value={projectStage} />
+                <input
+                    type="hidden"
+                    name="projectStage"
+                    value={projectStage}
+                    aria-invalid={hasFieldErrors("projectStage")}
+                    aria-describedby={hasFieldErrors("projectStage")
+                        ? getFieldErrorId("projectStage")
+                        : undefined}
+                />
                 <p class="text-xs text-gray-500">{selectedStageInfo.description}</p>
+                <ProjectFieldErrors
+                    id={getFieldErrorId("projectStage")}
+                    errors={getFieldErrors("projectStage")}
+                />
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-2" bind:this={helpTypesField}>
                 <div class="block text-sm font-bold text-gray-700">
                     今いちばん欲しい協力
                 </div>
-                <ProjectHelpTypePicker bind:value={helpTypes} />
+                <ProjectHelpTypePicker
+                    bind:value={helpTypes}
+                    invalid={hasFieldErrors("helpTypes")}
+                    describedBy={hasFieldErrors("helpTypes")
+                        ? getFieldErrorId("helpTypes")
+                        : undefined}
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("helpTypes")}
+                    errors={getFieldErrors("helpTypes")}
+                />
             </div>
 
             <div class="space-y-2">
@@ -714,10 +863,21 @@
                     name="helpRequest"
                     bind:value={helpRequest}
                     rows="4"
-                    class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("helpRequest")}
+                    aria-describedby={hasFieldErrors("helpRequest")
+                        ? getFieldErrorId("helpRequest")
+                        : undefined}
+                    class={getInputClass(
+                        "helpRequest",
+                        "w-full rounded-lg border px-4 py-3",
+                    )}
                     placeholder="何を見てほしいか、どんな人に来てほしいか、いま止まっているポイントは何かを書いてください。"
                 ></textarea>
                 <p class="text-xs text-gray-500">下書きでは短くても保存できます。公開前に、何を頼みたいかが伝わる内容に整えてください。</p>
+                <ProjectFieldErrors
+                    id={getFieldErrorId("helpRequest")}
+                    errors={getFieldErrors("helpRequest")}
+                />
             </div>
         </div>
     </section>
@@ -778,6 +938,14 @@
                     placeholder="例: 相談投稿に固定テンプレを出せる"
                     emptyStateLabel="見どころを追加"
                     helperText="1項目ずつ Enter で追加。5〜60文字の見どころを最大3件まで登録できます。"
+                    invalid={hasFieldErrors("highlights")}
+                    describedBy={hasFieldErrors("highlights")
+                        ? getFieldErrorId("highlights")
+                        : undefined}
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("highlights")}
+                    errors={getFieldErrors("highlights")}
                 />
             </div>
 
@@ -792,8 +960,19 @@
                     id="nextMilestone"
                     name="nextMilestone"
                     bind:value={nextMilestone}
-                    class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("nextMilestone")}
+                    aria-describedby={hasFieldErrors("nextMilestone")
+                        ? getFieldErrorId("nextMilestone")
+                        : undefined}
+                    class={getInputClass(
+                        "nextMilestone",
+                        "w-full rounded-lg border px-4 py-2",
+                    )}
                     placeholder="例: 今月中にプロジェクト詳細の更新投稿タブを本実装する"
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("nextMilestone")}
+                    errors={getFieldErrors("nextMilestone")}
                 />
             </div>
 
@@ -808,8 +987,19 @@
                     id="feedbackRequest"
                     name="feedbackRequest"
                     bind:value={feedbackRequest}
-                    class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("feedbackRequest")}
+                    aria-describedby={hasFieldErrors("feedbackRequest")
+                        ? getFieldErrorId("feedbackRequest")
+                        : undefined}
+                    class={getInputClass(
+                        "feedbackRequest",
+                        "w-full rounded-lg border px-4 py-2",
+                    )}
                     placeholder="例: 相談投稿の導線が直感的かを見てほしい"
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("feedbackRequest")}
+                    errors={getFieldErrors("feedbackRequest")}
                 />
             </div>
 
@@ -824,6 +1014,14 @@
                     placeholder="SvelteKit / TypeScript / コミュニティ"
                     emptyStateLabel="タグを追加"
                     helperText="公開時は2〜5件が目安です。入力して Enter で追加できます。"
+                    invalid={hasFieldErrors("tags")}
+                    describedBy={hasFieldErrors("tags")
+                        ? getFieldErrorId("tags")
+                        : undefined}
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("tags")}
+                    errors={getFieldErrors("tags")}
                 />
             </div>
 
@@ -840,8 +1038,19 @@
                         name="publicUrl"
                         type="url"
                         bind:value={publicUrl}
-                        class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                        aria-invalid={hasFieldErrors("publicUrl")}
+                        aria-describedby={hasFieldErrors("publicUrl")
+                            ? getFieldErrorId("publicUrl")
+                            : undefined}
+                        class={getInputClass(
+                            "publicUrl",
+                            "w-full rounded-lg border px-4 py-2",
+                        )}
                         placeholder="https://example.com"
+                    />
+                    <ProjectFieldErrors
+                        id={getFieldErrorId("publicUrl")}
+                        errors={getFieldErrors("publicUrl")}
                     />
                 </div>
 
@@ -854,8 +1063,19 @@
                         name="repoUrl"
                         type="url"
                         bind:value={repoUrl}
-                        class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                        aria-invalid={hasFieldErrors("repoUrl")}
+                        aria-describedby={hasFieldErrors("repoUrl")
+                            ? getFieldErrorId("repoUrl")
+                            : undefined}
+                        class={getInputClass(
+                            "repoUrl",
+                            "w-full rounded-lg border px-4 py-2",
+                        )}
                         placeholder="https://github.com/..."
+                    />
+                    <ProjectFieldErrors
+                        id={getFieldErrorId("repoUrl")}
+                        errors={getFieldErrors("repoUrl")}
                     />
                 </div>
             </div>
@@ -869,12 +1089,27 @@
                     name="demoUrl"
                     type="url"
                     bind:value={demoUrl}
-                    class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("demoUrl")}
+                    aria-describedby={hasFieldErrors("demoUrl")
+                        ? getFieldErrorId("demoUrl")
+                        : undefined}
+                    class={getInputClass(
+                        "demoUrl",
+                        "w-full rounded-lg border px-4 py-2",
+                    )}
                     placeholder="https://demo.example.com"
                 />
                 <p class="text-xs text-gray-500">
                     公開URL・GitHub URL・デモURL・スクリーンショットのいずれか1つで公開条件を満たせます。
                 </p>
+                <ProjectFieldErrors
+                    id={getFieldErrorId("demoUrl")}
+                    errors={getFieldErrors("demoUrl")}
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("assets")}
+                    errors={getFieldErrors("assets")}
+                />
             </div>
 
             <div class="space-y-3">
@@ -908,12 +1143,28 @@
                     type="file"
                     multiple
                     accept={PROJECT_SCREENSHOT_FILE_INPUT_ACCEPT}
+                    aria-invalid={hasFieldErrors("screenshots")}
+                    aria-describedby={hasFieldErrors("screenshots")
+                        ? getFieldErrorId("screenshots")
+                        : undefined}
                     disabled={shouldDisableScreenshotActions}
-                    class="block w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-700"
+                    class="block w-full rounded-lg border border-dashed bg-gray-50 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-700 {hasFieldErrors('screenshots')
+                        ? 'border-rose-300'
+                        : 'border-gray-300'}"
                     on:change={handleScreenshotSelection}
+                />
+                <ProjectFieldErrors
+                    id={getFieldErrorId("screenshots")}
+                    errors={getFieldErrors("screenshots")}
                 />
 
                 <input type="hidden" name="draftProjectId" value={draftProjectId} />
+                <input
+                    bind:this={statusIntentInput}
+                    type="hidden"
+                    name="statusIntent"
+                    value={submittedStatusIntent}
+                />
                 <input
                     type="hidden"
                     name="keptImagesJson"
@@ -1055,14 +1306,25 @@
                     name="backgroundNote"
                     bind:value={backgroundNote}
                     rows="5"
-                    class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500"
+                    aria-invalid={hasFieldErrors("backgroundNote")}
+                    aria-describedby={hasFieldErrors("backgroundNote")
+                        ? getFieldErrorId("backgroundNote")
+                        : undefined}
+                    class={getInputClass(
+                        "backgroundNote",
+                        "w-full rounded-lg border px-4 py-3",
+                    )}
                     placeholder="背景や経緯、補足しておきたい仕様があれば書いてください。"
                 ></textarea>
+                <ProjectFieldErrors
+                    id={getFieldErrorId("backgroundNote")}
+                    errors={getFieldErrors("backgroundNote")}
+                />
             </div>
         </div>
     </section>
 
-    {#if form?.message}
+    {#if form?.message && !hasFieldLevelErrors}
         <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {form.message}
         </div>
@@ -1072,8 +1334,7 @@
         {#if mode === "create"}
             <button
                 type="submit"
-                name="statusIntent"
-                value="draft"
+                data-status-intent="draft"
                 disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                 class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -1081,8 +1342,7 @@
             </button>
             <button
                 type="submit"
-                name="statusIntent"
-                value="published"
+                data-status-intent="published"
                 disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                 class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -1091,8 +1351,7 @@
         {:else}
             <button
                 type="submit"
-                name="statusIntent"
-                value="keep"
+                data-status-intent="keep"
                 disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                 class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -1102,8 +1361,7 @@
             {#if initialProject.status !== "published"}
                 <button
                     type="submit"
-                    name="statusIntent"
-                    value="published"
+                    data-status-intent="published"
                     disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                     class="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
                 >
@@ -1114,8 +1372,7 @@
             {#if initialProject.status !== "draft"}
                 <button
                     type="submit"
-                    name="statusIntent"
-                    value="draft"
+                    data-status-intent="draft"
                     disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                     class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-70"
                 >
@@ -1126,8 +1383,7 @@
             {#if initialProject.status !== "archived"}
                 <button
                     type="submit"
-                    name="statusIntent"
-                    value="archived"
+                    data-status-intent="archived"
                     disabled={isSubmitting || isPreparingScreenshots || pendingUploadCount > 0}
                     class="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
                 >

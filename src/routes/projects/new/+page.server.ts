@@ -12,6 +12,7 @@ import {
   validateProjectDraftId,
   validateProjectFormValues,
 } from "$lib/server/projects/form";
+import { resolveProjectSuccessToast } from "$lib/shared/project-form";
 import {
   cleanupProjectScreenshotFiles,
   getProjectScreenshotFiles,
@@ -70,7 +71,10 @@ export const actions: Actions = {
 
     if (createScreenshotMessage) {
       return fail(400, {
-        message: createScreenshotMessage,
+        errors: {
+          screenshots: [createScreenshotMessage],
+        },
+        firstErrorField: "screenshots",
         values: {
           ...values,
           draftProjectId: draftProjectIdResult.data,
@@ -111,7 +115,10 @@ export const actions: Actions = {
 
     if (screenshotMessage) {
       return fail(400, {
-        message: screenshotMessage,
+        errors: {
+          screenshots: [screenshotMessage],
+        },
+        firstErrorField: "screenshots",
         values: {
           ...values,
           draftProjectId: draftProjectIdResult.data,
@@ -130,7 +137,10 @@ export const actions: Actions = {
 
     if (!validatedUploadedImageUrls.success) {
       return fail(400, {
-        message: validatedUploadedImageUrls.message,
+        errors: {
+          screenshots: [validatedUploadedImageUrls.message],
+        },
+        firstErrorField: "screenshots",
         values: {
           ...values,
           draftProjectId: draftProjectIdResult.data,
@@ -151,6 +161,8 @@ export const actions: Actions = {
     if (!result.success) {
       return fail(400, {
         message: result.message,
+        errors: result.errors,
+        firstErrorField: result.firstErrorField,
         values: {
           ...values,
           draftProjectId: draftProjectIdResult.data,
@@ -183,6 +195,15 @@ export const actions: Actions = {
       });
     }
 
-    throw redirect(303, `/projects/${project.id}`);
+    const successToast = resolveProjectSuccessToast({
+      mode: "create",
+      statusIntent: values.statusIntent,
+      targetStatus,
+    });
+    const searchParams = new URLSearchParams({
+      toast: successToast,
+    });
+
+    throw redirect(303, `/projects/${project.id}?${searchParams.toString()}`);
   },
 };
