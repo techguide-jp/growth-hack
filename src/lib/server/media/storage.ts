@@ -18,6 +18,7 @@ const STATIC_ROOT = join(process.cwd(), "static");
 const STATIC_MEDIA_ROOT = join(STATIC_ROOT, "media");
 const LEGACY_UPLOAD_ROOT = join(STATIC_ROOT, "uploads", "projects");
 const VERCEL_BLOB_HOST_SUFFIX = ".public.blob.vercel-storage.com";
+const VERCEL_SERVERLESS_ROOT = "/var/task";
 
 type ProjectScreenshotSaveResult = {
   pathname: string;
@@ -61,10 +62,41 @@ function getBlobToken() {
   return process.env.BLOB_READ_WRITE_TOKEN;
 }
 
+function isServerlessBundleFilesystem() {
+  return process.cwd().startsWith(VERCEL_SERVERLESS_ROOT);
+}
+
+function getConfiguredMediaStorageDriver() {
+  const configuredDriver = process.env.MEDIA_STORAGE_DRIVER?.trim();
+
+  if (
+    configuredDriver === "local" ||
+    configuredDriver === "vercel-blob"
+  ) {
+    return configuredDriver;
+  }
+
+  return null;
+}
+
 export function getMediaStorageDriver(): MediaStorageDriver {
-  return process.env.MEDIA_STORAGE_DRIVER === "vercel-blob"
-    ? "vercel-blob"
-    : "local";
+  const configuredDriver = getConfiguredMediaStorageDriver();
+
+  if (configuredDriver) {
+    return configuredDriver;
+  }
+
+  return getBlobToken() ? "vercel-blob" : "local";
+}
+
+function assertLocalMediaStorageAvailable() {
+  if (!isServerlessBundleFilesystem()) {
+    return;
+  }
+
+  throw new Error(
+    "この実行環境では local 画像保存を利用できません。MEDIA_STORAGE_DRIVER=vercel-blob と BLOB_READ_WRITE_TOKEN を設定してください。",
+  );
 }
 
 export function getMediaUploadConfig() {
@@ -111,6 +143,8 @@ export async function saveProjectScreenshotBuffer(options: {
   if (!absolutePath) {
     throw new Error("画像の保存先が不正です。");
   }
+
+  assertLocalMediaStorageAvailable();
 
   await mkdir(
     join(
