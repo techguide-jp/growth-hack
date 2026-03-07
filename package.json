@@ -41,7 +41,7 @@
   "devDependencies": {
     "@better-auth/cli": "1.4.21",
     "@eslint/js": "^10.0.1",
-    "@sveltejs/adapter-auto": "^7.0.0",
+    "@sveltejs/adapter-vercel": "^6.3.1",
     "@sveltejs/kit": "^2.49.1",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/postcss": "^4.1.18",
@@ -59,14 +59,14 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^7.2.6",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "drizzle-kit": "0.31.4"
   },
   "dependencies": {
     "@vercel/blob": "^2.3.1",
     "better-auth": "1.4.21",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "drizzle-kit": "0.31.4",
     "drizzle-orm": "0.41.0",
     "heic-to": "^1.4.2",
     "lucide-svelte": "^0.562.0",
