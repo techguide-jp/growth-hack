@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { validateProjectScreenshots } from "$lib/server/projects/screenshots";
+import {
+  validateNewProjectScreenshotUrls,
+  validateProjectScreenshots,
+} from "$lib/server/projects/screenshots";
 
 function createFile(name: string, type: string, size: number) {
   return new File([new Uint8Array(size)], name, { type });
 }
 
 describe("project screenshot validation", () => {
+  it("new project では kept image を reject する", () => {
+    expect(
+      validateNewProjectScreenshotUrls([
+        "/media/project-screenshot/user-user-1/project-project-1/a.webp",
+      ]),
+    ).toBe(
+      "スクリーンショットの指定が不正です。画面を再読み込みしてやり直してください。",
+    );
+  });
+
   it("allowedImageUrls にない kept image を reject する", () => {
     const message = validateProjectScreenshots({
       files: [],

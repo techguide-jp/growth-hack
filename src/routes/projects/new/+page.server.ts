@@ -17,6 +17,7 @@ import {
   getProjectScreenshotFiles,
   parseUploadedProjectScreenshotUrls,
   parseKeptProjectScreenshotUrls,
+  validateNewProjectScreenshotUrls,
   validateStagedProjectScreenshotUrls,
   validateProjectScreenshots,
 } from "$lib/server/projects/screenshots";
@@ -61,6 +62,21 @@ export const actions: Actions = {
         message:
           "スクリーンショット情報の読み取りに失敗しました。画面を再読み込みしてやり直してください。",
         values,
+      });
+    }
+
+    const createScreenshotMessage =
+      validateNewProjectScreenshotUrls(keptImageUrls);
+
+    if (createScreenshotMessage) {
+      return fail(400, {
+        message: createScreenshotMessage,
+        values: {
+          ...values,
+          draftProjectId: draftProjectIdResult.data,
+          keptImagesJson: JSON.stringify([]),
+          uploadedImagesJson: JSON.stringify(uploadedImageUrls),
+        },
       });
     }
 
@@ -128,8 +144,7 @@ export const actions: Actions = {
     const result = validateProjectFormValues(values, {
       targetStatus,
       currentStatus: "draft",
-      existingImageCount:
-        keptImageUrls.length + validatedUploadedImageUrls.imageUrls.length,
+      existingImageCount: validatedUploadedImageUrls.imageUrls.length,
       pendingImageCount: screenshotFiles.length,
     });
 
@@ -150,7 +165,6 @@ export const actions: Actions = {
     const project = await createProject(user.id, result.data, {
       projectId: draftProjectIdResult.data,
       uploaderUserId: user.id,
-      keptImageUrls,
       screenshotFiles,
       stagedImageUrls: validatedUploadedImageUrls.imageUrls,
     });

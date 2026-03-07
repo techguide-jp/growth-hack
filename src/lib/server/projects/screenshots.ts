@@ -12,6 +12,9 @@ import {
 } from "$lib/server/media/validation";
 import { PROJECT_SCREENSHOT_MAX_COUNT } from "$lib/shared/media/config";
 
+const INVALID_SCREENSHOT_SELECTION_MESSAGE =
+  "スクリーンショットの指定が不正です。画面を再読み込みしてやり直してください。";
+
 function isFileEntry(value: FormDataEntryValue): value is File {
   return value instanceof File;
 }
@@ -69,6 +72,14 @@ export function parseUploadedProjectScreenshotUrls(
   return parseImageUrlArray(value);
 }
 
+export function validateNewProjectScreenshotUrls(keptImageUrls: string[]) {
+  if (keptImageUrls.length > 0) {
+    return INVALID_SCREENSHOT_SELECTION_MESSAGE;
+  }
+
+  return null;
+}
+
 export function validateProjectScreenshots(options: {
   files: File[];
   keptImageUrls: string[];
@@ -82,7 +93,7 @@ export function validateProjectScreenshots(options: {
     allowedImageUrls &&
     keptImageUrls.some((imageUrl) => !allowedSet.has(imageUrl))
   ) {
-    return "スクリーンショットの指定が不正です。画面を再読み込みしてやり直してください。";
+    return INVALID_SCREENSHOT_SELECTION_MESSAGE;
   }
 
   if (
