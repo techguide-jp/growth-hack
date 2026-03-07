@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
   getProjectScreenshotFileValidationMessage,
@@ -6,24 +5,40 @@ import {
   validateProcessedProjectScreenshotBuffer,
 } from "$lib/server/media/validation";
 
-async function createPngBuffer(options: { width: number; height: number }) {
-  return sharp({
-    create: {
-      width: options.width,
-      height: options.height,
-      channels: 3,
-      background: { r: 32, g: 64, b: 96 },
-    },
-  })
-    .png()
-    .toBuffer();
+function createWebpBuffer(options: { width: number; height: number }) {
+  const widthMinusOne = options.width - 1;
+  const heightMinusOne = options.height - 1;
+  const payload = Buffer.from([
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    widthMinusOne & 0xff,
+    (widthMinusOne >> 8) & 0xff,
+    (widthMinusOne >> 16) & 0xff,
+    heightMinusOne & 0xff,
+    (heightMinusOne >> 8) & 0xff,
+    (heightMinusOne >> 16) & 0xff,
+  ]);
+  const chunkSize = payload.length;
+  const fileSize = 4 + 4 + 4 + 4 + payload.length;
+  const buffer = Buffer.alloc(8 + fileSize);
+
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(fileSize, 4);
+  buffer.write("WEBP", 8, "ascii");
+  buffer.write("VP8X", 12, "ascii");
+  buffer.writeUInt32LE(chunkSize, 16);
+  payload.copy(buffer, 20);
+
+  return buffer;
 }
 
 describe("server media validation", () => {
-  it("raw PNG を canonical webp に変換できる", async () => {
-    const pngBuffer = await createPngBuffer({ width: 320, height: 180 });
-    const file = new File([new Uint8Array(pngBuffer)], "capture.png", {
-      type: "image/png",
+  it("processed webp をそのまま受け入れられる", async () => {
+    const webpBuffer = createWebpBuffer({ width: 320, height: 180 });
+    const file = new File([new Uint8Array(webpBuffer)], "capture.webp", {
+      type: "image/webp",
     });
 
     const processed = await processProjectScreenshotFile(file);
@@ -31,12 +46,9 @@ describe("server media validation", () => {
       buffer: processed,
       contentType: "image/webp",
     });
-    const metadata = await sharp(processed).metadata();
 
     expect(validationMessage).toBeNull();
-    expect(metadata.format).toBe("webp");
-    expect(metadata.width).toBe(320);
-    expect(metadata.height).toBe(180);
+    expect(processed.equals(webpBuffer)).toBe(true);
   });
 
   it("HEIC raw file はブラウザ変換前提として server upload では弾く", () => {
@@ -50,13 +62,24 @@ describe("server media validation", () => {
   });
 
   it("webp 以外の保存済み buffer を reject する", async () => {
-    const pngBuffer = await createPngBuffer({ width: 10, height: 10 });
+    const pngLikeBuffer = Buffer.from("not-a-webp");
 
     await expect(
       validateProcessedProjectScreenshotBuffer({
-        buffer: pngBuffer,
-        contentType: "image/png",
+        buffer: pngLikeBuffer,
+        contentType: "image/webp",
       }),
-    ).resolves.toBe("保存済みスクリーンショットの content-type が不正です。");
+    ).resolves.toBe("保存済みスクリーンショットの形式が不正です。");
+  });
+
+  it("上限を超えるサイズの webp を reject する", async () => {
+    const oversizedWebp = createWebpBuffer({ width: 2200, height: 180 });
+
+    await expect(
+      validateProcessedProjectScreenshotBuffer({
+        buffer: oversizedWebp,
+        contentType: "image/webp",
+      }),
+    ).resolves.toBe("保存済みスクリーンショットのサイズが上限を超えています。");
   });
 });
