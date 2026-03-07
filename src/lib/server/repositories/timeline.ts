@@ -110,7 +110,7 @@ export function canViewerAccessProject(
     return false;
   }
 
-  return project.status === "published" || project.ownerUserId === viewerUserId;
+  return project.status !== "draft" || project.ownerUserId === viewerUserId;
 }
 
 export function canLinkProjectToTimelinePost(

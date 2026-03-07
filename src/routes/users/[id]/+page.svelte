@@ -27,7 +27,7 @@
     export let data: {
         profile: {
             id: string;
-            email: string;
+            email: string | null;
             name: string;
             avatarUrl: string | null;
         } | null;
@@ -75,7 +75,11 @@
                     <h1 class="text-3xl font-bold text-gray-900">
                         {data.profile.name}
                     </h1>
-                    <p class="text-sm text-gray-500 mt-1">{data.profile.email}</p>
+                    {#if data.profile.email}
+                        <p class="text-sm text-gray-500 mt-1">
+                            {data.profile.email}
+                        </p>
+                    {/if}
                     <div class="flex flex-wrap gap-2 mt-3">
                         {#each data.focusModes as mode}
                             <span

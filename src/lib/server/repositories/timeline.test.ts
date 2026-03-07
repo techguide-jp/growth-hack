@@ -126,7 +126,7 @@ describe("timeline repository helpers", () => {
     ).toBe(false);
   });
 
-  it("draft プロジェクトは所有者だけ参照でき、タイムライン紐付けは公開済みのみ許可する", () => {
+  it("draft 以外のプロジェクトは参照でき、タイムライン紐付けは公開済みのみ許可する", () => {
     expect(
       canViewerAccessProject(
         {
@@ -156,6 +156,16 @@ describe("timeline repository helpers", () => {
         "u2",
       ),
     ).toBe(false);
+
+    expect(
+      canViewerAccessProject(
+        {
+          ownerUserId: "u1",
+          status: "archived",
+        },
+        "u2",
+      ),
+    ).toBe(true);
 
     expect(
       canLinkProjectToTimelinePost({

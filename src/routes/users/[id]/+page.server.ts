@@ -11,6 +11,7 @@ export const load: PageServerLoad = async (event) => {
   event.depends(TIMELINE_INVALIDATION_KEY);
 
   const userId = event.params.id;
+  const isOwnProfile = event.locals.user?.id === userId;
   const db = getDb();
   const [profileRecord] = await db
     .select({
@@ -33,7 +34,6 @@ export const load: PageServerLoad = async (event) => {
     };
   }
 
-  const isOwnProfile = event.locals.user?.id === userId;
   const [preferences, userProjects, recentPosts] = await Promise.all([
     getUserPreferencesState(userId),
     listProjects({
@@ -69,7 +69,10 @@ export const load: PageServerLoad = async (event) => {
   );
 
   return {
-    profile: profileRecord,
+    profile: {
+      ...profileRecord,
+      email: isOwnProfile ? profileRecord.email : null,
+    },
     userProjects,
     recentPosts,
     focusModes: preferences.focusModes,
