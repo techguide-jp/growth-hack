@@ -1,14 +1,5 @@
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { parse } from "svelte/compiler";
 
-const workspaceRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
-const svelteRoot = path.join(workspaceRoot, "src");
 const legacySvelteImports = new Set([
   "createEventDispatcher",
   "onMount",
@@ -16,25 +7,6 @@ const legacySvelteImports = new Set([
   "beforeUpdate",
   "afterUpdate",
 ]);
-
-async function collectSvelteFiles(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = await Promise.all(
-    entries.map(async (entry) => {
-      const entryPath = path.join(directory, entry.name);
-
-      if (entry.isDirectory()) {
-        return collectSvelteFiles(entryPath);
-      }
-
-      return entry.isFile() && entry.name.endsWith(".svelte")
-        ? [entryPath]
-        : [];
-    }),
-  );
-
-  return files.flat().sort();
-}
 
 function getLineStarts(source) {
   const lineStarts = [0];
@@ -59,31 +31,35 @@ function getPositionFromIndex(lineStarts, index) {
 
     if (index < start) {
       high = middle - 1;
-    } else if (index >= nextStart) {
-      low = middle + 1;
-    } else {
-      return {
-        line: middle + 1,
-        column: index - start + 1,
-      };
+      continue;
     }
+
+    if (index >= nextStart) {
+      low = middle + 1;
+      continue;
+    }
+
+    return {
+      line: middle + 1,
+      column: index - start,
+    };
   }
 
-  return { line: 1, column: 1 };
+  return { line: 1, column: 0 };
 }
 
 function getNodePosition(node, lineStarts) {
   if (node?.name_loc?.start) {
     return {
       line: node.name_loc.start.line,
-      column: node.name_loc.start.column + 1,
+      column: node.name_loc.start.column,
     };
   }
 
   if (node?.loc?.start) {
     return {
       line: node.loc.start.line,
-      column: node.loc.start.column + 1,
+      column: node.loc.start.column,
     };
   }
 
@@ -91,7 +67,7 @@ function getNodePosition(node, lineStarts) {
     return getPositionFromIndex(lineStarts, node.start);
   }
 
-  return { line: 1, column: 1 };
+  return { line: 1, column: 0 };
 }
 
 function visitAst(node, visit) {
@@ -120,18 +96,19 @@ function visitAst(node, visit) {
   }
 }
 
-function addIssue(issues, filePath, lineStarts, node, message) {
+function report(context, lineStarts, node, message) {
   const position = getNodePosition(node, lineStarts);
 
-  issues.push({
-    filePath,
-    line: position.line,
-    column: position.column,
+  context.report({
+    loc: {
+      start: position,
+      end: position,
+    },
     message,
   });
 }
 
-function checkScript(script, filePath, lineStarts, issues) {
+function checkScript(context, script, lineStarts) {
   if (!script?.content) {
     return;
   }
@@ -142,23 +119,23 @@ function checkScript(script, filePath, lineStarts, issues) {
       node.declaration?.type === "VariableDeclaration" &&
       node.declaration.kind === "let"
     ) {
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         node,
         "`export let` は legacy 記法です。`$props()` を使ってください。",
       );
+      return;
     }
 
     if (node.type === "LabeledStatement" && node.label?.name === "$") {
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         node,
         "`$:` は legacy 記法です。`$derived(...)` または `$effect(...)` を使ってください。",
       );
+      return;
     }
 
     if (node.type !== "ImportDeclaration") {
@@ -166,9 +143,8 @@ function checkScript(script, filePath, lineStarts, issues) {
     }
 
     if (node.source.value === "$app/stores") {
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         node,
         "`$app/stores` は legacy です。`$app/state` を使ってください。",
@@ -176,9 +152,8 @@ function checkScript(script, filePath, lineStarts, issues) {
     }
 
     if (node.source.value === "svelte/legacy") {
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         node,
         "`svelte/legacy` の import は避けて、Svelte 5 の素の構文へ移行してください。",
@@ -194,33 +169,29 @@ function checkScript(script, filePath, lineStarts, issues) {
         continue;
       }
 
-      const importedName = specifier.imported?.name;
-
-      if (!legacySvelteImports.has(importedName)) {
+      if (!legacySvelteImports.has(specifier.imported?.name)) {
         continue;
       }
 
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         specifier,
-        `\`${importedName}\` は今回の基準では legacy API です。Svelte 5 Rune/新構文へ置き換えてください。`,
+        `\`${specifier.imported.name}\` は legacy API です。Svelte 5 Rune/新構文へ置き換えてください。`,
       );
     }
   });
 }
 
-function checkTemplate(fragment, filePath, lineStarts, issues) {
+function checkTemplate(context, fragment, lineStarts) {
   if (!fragment) {
     return;
   }
 
   visitAst(fragment, (node) => {
     if (node.type === "EventHandler") {
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         node,
         "`on:` ディレクティブは legacy 記法です。`onclick` などの属性へ置き換えてください。",
@@ -228,9 +199,8 @@ function checkTemplate(fragment, filePath, lineStarts, issues) {
     }
 
     if (node.type === "Slot") {
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         node,
         "`<slot>` は legacy 記法です。snippet props と `{@render ...}` を使ってください。",
@@ -238,9 +208,8 @@ function checkTemplate(fragment, filePath, lineStarts, issues) {
     }
 
     if (node.type === "InlineComponent" && node.name === "svelte:component") {
-      addIssue(
-        issues,
-        filePath,
+      report(
+        context,
         lineStarts,
         node,
         "`<svelte:component>` は legacy 記法です。`<Component />` や `<item.icon />` の直接記法へ置き換えてください。",
@@ -249,44 +218,47 @@ function checkTemplate(fragment, filePath, lineStarts, issues) {
   });
 }
 
-async function main() {
-  const files = await collectSvelteFiles(svelteRoot);
-  const issues = [];
+const noLegacySvelte5SyntaxRule = {
+  meta: {
+    type: "problem",
+    docs: {
+      description:
+        "disallow legacy Svelte syntax when the codebase is standardized on Svelte 5 runes",
+    },
+    schema: [],
+  },
+  create(context) {
+    const filename = context.filename ?? context.getFilename();
 
-  for (const filePath of files) {
-    const source = await readFile(filePath, "utf8");
-    const lineStarts = getLineStarts(source);
-
-    try {
-      const ast = parse(source);
-      checkScript(ast.instance, filePath, lineStarts, issues);
-      checkScript(ast.module, filePath, lineStarts, issues);
-      checkTemplate(ast.html, filePath, lineStarts, issues);
-    } catch (error) {
-      issues.push({
-        filePath,
-        line: error?.start?.line ?? 1,
-        column: (error?.start?.column ?? 0) + 1,
-        message: `Svelte の parse に失敗しました: ${error instanceof Error ? error.message : String(error)}`,
-      });
+    if (!filename.endsWith(".svelte")) {
+      return {};
     }
-  }
 
-  if (issues.length === 0) {
-    console.log(`Svelte Rune check passed. ${files.length} files checked.`);
-    return;
-  }
+    return {
+      Program() {
+        const source = context.sourceCode.text;
+        const lineStarts = getLineStarts(source);
 
-  console.error(`Svelte Rune check failed. ${issues.length} issue(s) found.\n`);
+        try {
+          const ast = parse(source);
+          checkScript(context, ast.instance, lineStarts);
+          checkScript(context, ast.module, lineStarts);
+          checkTemplate(context, ast.html, lineStarts);
+        } catch (error) {
+          const line = error?.start?.line ?? 1;
+          const column = error?.start?.column ?? 0;
 
-  for (const issue of issues) {
-    const relativePath = path.relative(workspaceRoot, issue.filePath);
-    console.error(
-      `- ${relativePath}:${issue.line}:${issue.column} ${issue.message}`,
-    );
-  }
+          context.report({
+            loc: {
+              start: { line, column },
+              end: { line, column },
+            },
+            message: `Svelte の parse に失敗しました: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+      },
+    };
+  },
+};
 
-  process.exitCode = 1;
-}
-
-await main();
+export default noLegacySvelte5SyntaxRule;
