@@ -1,77 +1,96 @@
 <script lang="ts">
+    import { page } from "$app/stores";
+    import { sessionUser } from "$lib/stores/session";
     import {
-        currentUser,
-        projects,
         supportRecords,
         messages,
-        timelinePosts,
         conversations,
-        userPreferences,
         users,
     } from "$lib/stores/mock";
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
     import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import type {
+        ProjectHelpType,
+        ProjectStage,
+        ProjectStatus,
+    } from "$lib/shared/domain";
+    import type { TimelinePostView } from "$lib/shared/timeline";
     import { Plus, Gift, MessageSquare, HelpCircle } from "lucide-svelte";
 
-    $: myProjects = $projects.filter((p) => p.ownerId === $currentUser?.id);
+    export let data: {
+        myProjects: Array<{
+            id: string;
+            ownerId: string;
+            ownerName: string | null;
+            ownerAvatarUrl: string | null;
+            title: string;
+            oneLiner: string;
+            problemStatement: string;
+            projectStage: ProjectStage | null;
+            helpTypes: ProjectHelpType[];
+            helpRequest: string;
+            highlights: string[];
+            nextMilestone: string;
+            feedbackRequest: string;
+            backgroundNote: string;
+            publicUrl?: string;
+            repoUrl?: string;
+            demoUrl?: string;
+            tags: string[];
+            images: string[];
+            status: ProjectStatus;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+        myUnresolvedQuestions: TimelinePostView[];
+    };
 
-    // Support waiting for my confirmation
-    $: myProjectIds = myProjects.map((p) => p.id);
+    $: myProjectIds = data.myProjects.map((project) => project.id);
     $: pendingSupports = $supportRecords.filter(
-        (r) =>
-            myProjectIds.includes(r.projectId) && r.status === "awaiting_owner",
+        (record) =>
+            myProjectIds.includes(record.projectId) &&
+            record.status === "awaiting_owner",
     );
 
-    // Unresolved Questions
-    $: myUnresolvedQuestions = $timelinePosts.filter(
-        (p) =>
-            p.authorId === $currentUser?.id &&
-            p.type === "question" &&
-            p.status === "open",
-    );
-
-    // Unread Messages (Mock: Showing recent conversations)
     $: myConversations = $conversations
-        .filter((c) => c.memberIds.includes($currentUser?.id ?? ""))
+        .filter((conversation) =>
+            conversation.memberIds.includes($sessionUser?.id ?? ""),
+        )
         .sort(
             (a, b) =>
                 new Date(b.lastMessageAt).getTime() -
                 new Date(a.lastMessageAt).getTime(),
         );
 
-    // Focus Mode
-    $: myPreferences = $userPreferences.find(
-        (p) => p.userId === $currentUser?.id,
-    );
-    $: focusModes = myPreferences?.focusModes || [];
+    $: focusModes = $page.data.preferences?.focusModes ?? [];
 
-    // Helper to get conversation partner
     function getPartner(memberIds: string[]) {
-        const partnerId = memberIds.find((id) => id !== $currentUser?.id);
-        return $users.find((u) => u.id === partnerId);
+        const partnerId = memberIds.find((id) => id !== $sessionUser?.id);
+        return $users.find((user) => user.id === partnerId);
     }
 
     function getLastMessage(conversationId: string) {
-        const msgs = $messages.filter(
-            (m) => m.conversationId === conversationId,
+        const history = $messages.filter(
+            (message) => message.conversationId === conversationId,
         );
-        return msgs[msgs.length - 1];
+        return history[history.length - 1];
     }
 </script>
 
 <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
     <div class="flex items-center gap-4 mb-8">
         <img
-            src={$currentUser?.avatarUrl}
+            src={$sessionUser?.avatarUrl ||
+                `https://i.pravatar.cc/150?u=${encodeURIComponent($sessionUser?.id ?? "guest")}`}
             class="w-16 h-16 rounded-full border-2 border-white shadow"
             alt=""
         />
         <div>
             <h1 class="text-3xl font-bold text-gray-900">
-                {$currentUser?.name}のダッシュボード
+                {$sessionUser?.name ?? "User"}のダッシュボード
             </h1>
-            <p class="text-gray-500">{$currentUser?.email}</p>
-            <div class="flex gap-2 mt-2">
+            <p class="text-gray-500">{$sessionUser?.email}</p>
+            <div class="flex gap-2 mt-2 flex-wrap">
                 {#each focusModes as mode}
                     <span
                         class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200"
@@ -84,10 +103,8 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Main Column -->
         <div class="lg:col-span-2 space-y-8">
-            <!-- Unresolved Questions -->
-            {#if myUnresolvedQuestions.length > 0}
+            {#if data.myUnresolvedQuestions.length > 0}
                 <section>
                     <div class="flex items-center justify-between mb-4">
                         <h2
@@ -98,18 +115,17 @@
                         </h2>
                     </div>
                     <div class="space-y-4">
-                        {#each myUnresolvedQuestions as post}
+                        {#each data.myUnresolvedQuestions as post (post.id)}
                             <TimelinePostCard {post} compact />
                         {/each}
                     </div>
                 </section>
             {/if}
 
-            <!-- Projects -->
             <section>
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-xl font-bold text-gray-900">
-                        自分のプロジェクト ({myProjects.length})
+                        自分のプロジェクト ({data.myProjects.length})
                     </h2>
                     <a
                         href="/projects/new"
@@ -120,10 +136,10 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {#each myProjects as project}
+                    {#each data.myProjects as project (project.id)}
                         <ProjectCard {project} />
                     {/each}
-                    {#if myProjects.length === 0}
+                    {#if data.myProjects.length === 0}
                         <div
                             class="col-span-full py-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500"
                         >
@@ -134,9 +150,7 @@
             </section>
         </div>
 
-        <!-- Sidebar -->
         <div class="space-y-6">
-            <!-- Support Pending -->
             <div
                 class="bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden"
             >
@@ -162,7 +176,7 @@
                                         ¥{support.amount.toLocaleString()}
                                     </div>
                                     <a
-                                        href="/projects/{support.projectId}"
+                                        href={`/projects/${support.projectId}`}
                                         class="text-indigo-600 hover:underline text-xs"
                                         >確認画面へ</a
                                     >
@@ -177,7 +191,6 @@
                 </div>
             </div>
 
-            <!-- Messages -->
             <div
                 class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
             >
@@ -191,9 +204,9 @@
                 <div class="divide-y divide-gray-100">
                     {#each myConversations as conversation}
                         {@const partner = getPartner(conversation.memberIds)}
-                        {@const lastMsg = getLastMessage(conversation.id)}
+                        {@const lastMessage = getLastMessage(conversation.id)}
                         <a
-                            href="/messages/{conversation.id}"
+                            href={`/messages/${conversation.id}`}
                             class="block p-3 hover:bg-gray-50 transition-colors"
                         >
                             <div class="flex items-center gap-3">
@@ -230,8 +243,8 @@
                                         </div>
                                     </div>
                                     <div class="text-sm text-gray-500 truncate">
-                                        {lastMsg
-                                            ? lastMsg.body
+                                        {lastMessage
+                                            ? lastMessage.body
                                             : "まだメッセージはありません"}
                                     </div>
                                 </div>

@@ -1,48 +1,50 @@
 <script lang="ts">
-    import {
-        timelinePosts,
-        projects,
-        userPreferences,
-        currentUser,
-    } from "$lib/stores/mock";
-    import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import { page } from "$app/stores";
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
-    import { Rocket, Plus, Search } from "lucide-svelte";
+    import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import type {
+        ProjectHelpType,
+        ProjectStage,
+        ProjectStatus,
+    } from "$lib/shared/domain";
+    import type { TimelinePostView } from "$lib/shared/timeline";
+    import { Rocket, Search } from "lucide-svelte";
 
-    // Sort logic based on prefs
-    $: myPrefs = $userPreferences.find((p) => p.userId === $currentUser?.id);
-    $: focusModes = myPrefs?.focusModes || [
-        "post",
-        "support",
-        "collab",
-        "event",
-    ];
+    export let data: {
+        recentPosts: TimelinePostView[];
+        recentProjects: Array<{
+            id: string;
+            ownerId: string;
+            ownerName: string | null;
+            ownerAvatarUrl: string | null;
+            title: string;
+            oneLiner: string;
+            problemStatement: string;
+            projectStage: ProjectStage | null;
+            helpTypes: ProjectHelpType[];
+            helpRequest: string;
+            highlights: string[];
+            nextMilestone: string;
+            feedbackRequest: string;
+            backgroundNote: string;
+            publicUrl?: string;
+            repoUrl?: string;
+            demoUrl?: string;
+            tags: string[];
+            images: string[];
+            status: ProjectStatus;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
 
-    // Latest timeline
-    $: recentPosts = [...$timelinePosts]
-        .sort(
-            (a, b) =>
-                new Date(b.createdAt).getTime() -
-                new Date(a.createdAt).getTime(),
-        )
-        .slice(0, 5);
+    const defaultFocusModes = ["post", "support", "collab", "event"];
 
-    // Latest projects
-    $: recentProjects = [...$projects]
-        .sort(
-            (a, b) =>
-                new Date(b.updatedAt).getTime() -
-                new Date(a.updatedAt).getTime(),
-        )
-        .slice(0, 3);
-
-    // Dynamic Section Ordering
-    // If 'post' is primary, show Timeline first. If 'support', show Projects first.
-    // For MVP, just show sections.
+    $: focusModes = $page.data.preferences?.focusModes ?? defaultFocusModes;
+    $: hasPreferences = Boolean($page.data.preferences);
 </script>
 
 <div class="space-y-12">
-    <!-- Hero / CTA -->
     <section
         class="text-center py-10 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl text-white shadow-xl"
     >
@@ -72,8 +74,7 @@
         </div>
     </section>
 
-    <!-- My Focus -->
-    {#if myPrefs}
+    {#if hasPreferences}
         <div class="flex items-center justify-between">
             <h2 class="text-xl font-bold text-gray-800">
                 あなたの現在のモード
@@ -83,20 +84,18 @@
                 class="text-sm text-indigo-600 hover:underline">変更する</a
             >
         </div>
-        <div class="flex gap-2 -mt-8 mb-8">
-            {#each focusModes as m}
+        <div class="flex gap-2 -mt-8 mb-8 flex-wrap">
+            {#each focusModes as mode}
                 <span
                     class="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium border border-indigo-100 uppercase"
-                    >{m}</span
+                    >{mode}</span
                 >
             {/each}
         </div>
     {/if}
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Main Feed -->
         <div class="lg:col-span-2 space-y-8">
-            <!-- Latest Posts -->
             <section>
                 <div class="flex items-center justify-between mb-4">
                     <h2
@@ -111,17 +110,24 @@
                         >もっと見る &rarr;</a
                     >
                 </div>
-                <div class="space-y-4">
-                    {#each recentPosts as post (post.id)}
-                        <TimelinePostCard {post} />
-                    {/each}
-                </div>
+
+                {#if data.recentPosts.length > 0}
+                    <div class="space-y-4">
+                        {#each data.recentPosts as post (post.id)}
+                            <TimelinePostCard {post} />
+                        {/each}
+                    </div>
+                {:else}
+                    <div
+                        class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center text-gray-500"
+                    >
+                        まだ投稿がありません。最初の投稿をしてみましょう。
+                    </div>
+                {/if}
             </section>
         </div>
 
-        <!-- Right Column -->
         <div class="space-y-8">
-            <!-- New Projects -->
             <section>
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-xl font-bold text-gray-900">
@@ -133,11 +139,20 @@
                         >一覧 &rarr;</a
                     >
                 </div>
-                <div class="space-y-4">
-                    {#each recentProjects as project (project.id)}
-                        <ProjectCard {project} />
-                    {/each}
-                </div>
+
+                {#if data.recentProjects.length > 0}
+                    <div class="space-y-4">
+                        {#each data.recentProjects as project (project.id)}
+                            <ProjectCard {project} />
+                        {/each}
+                    </div>
+                {:else}
+                    <div
+                        class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center text-gray-500"
+                    >
+                        まだ公開プロジェクトがありません。
+                    </div>
+                {/if}
             </section>
         </div>
     </div>
