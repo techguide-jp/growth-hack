@@ -453,7 +453,14 @@
             imageMessage = toErrorMessage(error);
         } finally {
             isPreparingScreenshots = false;
-            input.value = "";
+
+            // In local mode the processed File objects must stay attached to the
+            // input so multipart/form-data can submit them on save.
+            if (uploadContext.supportsDirectUpload) {
+                input.value = "";
+            } else {
+                syncScreenshotInputFiles();
+            }
         }
     }
 
