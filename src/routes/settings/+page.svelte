@@ -6,6 +6,7 @@
     } from "$lib/shared/settings";
     import { notificationSettingsInputSchema } from "$lib/shared/settings";
     import { Bell, Save, Rocket, Heart, Users, Calendar } from "lucide-svelte";
+    import type { PageProps } from "./$types";
 
     type NotificationRule = {
         id: NotificationRuleId;
@@ -13,23 +14,12 @@
         inApp: boolean;
         email: boolean;
     };
-
-    export let data: {
-        preferences: UserPreferencesState;
-        notificationSettings: NotificationSettingsPayload;
+    type SettingsFormValues = {
+        focusModes?: string[];
+        notificationSettings?: NotificationSettingsPayload | null;
     };
 
-    export let form:
-        | {
-              intent?: "focus" | "notifications";
-              success?: boolean;
-              message?: string;
-              values?: {
-                  focusModes?: string[];
-                  notificationSettings?: NotificationSettingsPayload | null;
-              } | null;
-          }
-        | undefined;
+    let { data, form }: PageProps = $props();
 
     const MODES = [
         { id: "post", label: "作品を投稿したい", icon: Rocket },
@@ -46,18 +36,20 @@
         announcement: "運営告知",
     };
 
-    const parsedNotificationSettings = notificationSettingsInputSchema.safeParse(
-        form?.values?.notificationSettings,
-    );
-    let selectedModes = [...(form?.values?.focusModes ?? data.preferences.focusModes)];
-    let notificationSettings =
-        parsedNotificationSettings.success
-            ? parsedNotificationSettings.data
-            : data.notificationSettings;
+    function getFormValues(): SettingsFormValues | null {
+        if (!form || !("values" in form)) {
+            return null;
+        }
 
-    $: serializedFocusModes = JSON.stringify(selectedModes);
-    $: serializedNotificationSettings = JSON.stringify(notificationSettings);
-    $: notificationRules = (
+        return (form.values as SettingsFormValues | null) ?? null;
+    }
+
+    let selectedModes = $state<string[]>((() => [...data.preferences.focusModes])());
+    let notificationSettings = $state<NotificationSettingsPayload>((() => data.notificationSettings)());
+
+    let serializedFocusModes = $derived(JSON.stringify(selectedModes));
+    let serializedNotificationSettings = $derived(JSON.stringify(notificationSettings));
+    let notificationRules = $derived((
         Object.entries(notificationSettings.rules) as Array<
             [NotificationRuleId, NotificationSettingsPayload["rules"][NotificationRuleId]]
         >
@@ -66,13 +58,13 @@
         label: notificationLabels[id],
         inApp: rule.inApp,
         email: rule.email,
-    }));
-    $: focusSaved = form?.intent === "focus" && form?.success === true;
-    $: notificationSaved =
-        form?.intent === "notifications" && form?.success === true;
-    $: focusError = form?.intent === "focus" ? form?.message ?? "" : "";
-    $: notificationError =
-        form?.intent === "notifications" ? form?.message ?? "" : "";
+    })));
+    let focusSaved = $derived(form?.intent === "focus" && form?.success === true);
+    let notificationSaved =
+        $derived(form?.intent === "notifications" && form?.success === true);
+    let focusError = $derived(form?.intent === "focus" ? form?.message ?? "" : "");
+    let notificationError =
+        $derived(form?.intent === "notifications" ? form?.message ?? "" : "");
 
     function toggleMode(modeId: string) {
         if (selectedModes.includes(modeId)) {
@@ -99,6 +91,20 @@
             },
         };
     }
+
+    $effect(() => {
+        selectedModes = [...(getFormValues()?.focusModes ?? data.preferences.focusModes)];
+    });
+
+    $effect(() => {
+        const parsedNotificationSettings = notificationSettingsInputSchema.safeParse(
+            getFormValues()?.notificationSettings,
+        );
+
+        notificationSettings = parsedNotificationSettings.success
+            ? parsedNotificationSettings.data
+            : data.notificationSettings;
+    });
 </script>
 
 <div class="max-w-5xl mx-auto py-8 space-y-8">
@@ -134,9 +140,9 @@
                         )
                             ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                             : 'border-gray-200 hover:bg-gray-50'}"
-                        on:click={() => toggleMode(mode.id)}
+                        onclick={() => toggleMode(mode.id)}
                     >
-                        <svelte:component this={mode.icon} class="w-5 h-5" />
+                        <mode.icon class="w-5 h-5" />
                         <span class="font-medium">{mode.label}</span>
                     </button>
                 {/each}
@@ -193,7 +199,7 @@
                                     <input
                                         type="checkbox"
                                         checked={rule.inApp}
-                                        on:change={(event) =>
+                                        onchange={(event) =>
                                             updateRule(
                                                 index,
                                                 "inApp",
@@ -206,7 +212,7 @@
                                     <input
                                         type="checkbox"
                                         checked={rule.email}
-                                        on:change={(event) =>
+                                        onchange={(event) =>
                                             updateRule(
                                                 index,
                                                 "email",

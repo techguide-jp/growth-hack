@@ -1,6 +1,6 @@
 <script lang="ts">
     import { goto, invalidate } from "$app/navigation";
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import { sessionUser } from "$lib/stores/session";
     import type { ReactionKind, ReactionTargetType } from "$lib/shared/domain";
     import {
@@ -12,11 +12,19 @@
     import { animate, type DOMKeyframesDefinition } from "motion";
     import { tick } from "svelte";
 
-    export let targetId: string;
-    export let targetType: ReactionTargetType;
-    export let reactions: TimelineReactionSummary[] =
-        createEmptyTimelineReactionSummary();
-    export let invalidateKey: string | null = null;
+    interface Props {
+        targetId: string;
+        targetType: ReactionTargetType;
+        reactions?: TimelineReactionSummary[];
+        invalidateKey?: string | null;
+    }
+
+    let {
+        targetId,
+        targetType,
+        reactions = createEmptyTimelineReactionSummary(),
+        invalidateKey = null
+    }: Props = $props();
 
     type ReactionDelta = -1 | 1;
     type ReactionDisplay = (typeof REACTION_CONFIG)[number] & {
@@ -24,15 +32,10 @@
         reactedByMe: boolean;
     };
 
-    let currentReactions = cloneReactionSummary(reactions);
-    let errorMessage = "";
-    let isSubmitting = false;
-    let lastPropReactionSignature = "";
-    let reactionStateMap = new Map<
-        ReactionKind,
-        { count: number; reactedByMe: boolean }
-    >();
-    let displayReactions: ReactionDisplay[] = [];
+    let currentReactions = $state((() => cloneReactionSummary(reactions))());
+    let errorMessage = $state("");
+    let isSubmitting = $state(false);
+    let lastPropReactionSignature = $state("");
 
     const REACTION_CONFIG = [
         {
@@ -222,38 +225,40 @@
         }
     }
 
-    $: {
+    $effect(() => {
         const nextSignature = getReactionSignature(reactions);
 
         if (nextSignature !== lastPropReactionSignature && !isSubmitting) {
             currentReactions = cloneReactionSummary(reactions);
             lastPropReactionSignature = nextSignature;
         }
-    }
-
-    $: loginHref = `/login?next=${encodeURIComponent(
-        `${$page.url.pathname}${$page.url.search}`,
-    )}`;
-
-    $: reactionStateMap = new Map(
-        currentReactions.map((reaction) => [
-            reaction.kind,
-            {
-                count: reaction.count,
-                reactedByMe: reaction.reactedByMe,
-            },
-        ]),
-    );
-
-    $: displayReactions = REACTION_CONFIG.map((reaction) => {
-        const state = reactionStateMap.get(reaction.kind);
-
-        return {
-            ...reaction,
-            count: state?.count ?? 0,
-            reactedByMe: state?.reactedByMe ?? false,
-        };
     });
+
+    let loginHref = $derived(`/login?next=${encodeURIComponent(
+        `${page.url.pathname}${page.url.search}`,
+    )}`);
+
+    let reactionStateMap = $derived.by(() => new Map(
+            currentReactions.map((reaction) => [
+                reaction.kind,
+                {
+                    count: reaction.count,
+                    reactedByMe: reaction.reactedByMe,
+                },
+            ]),
+        ));
+
+    let displayReactions = $derived.by(() =>
+        REACTION_CONFIG.map((reaction) => {
+            const state = reactionStateMap.get(reaction.kind);
+
+            return {
+                ...reaction,
+                count: state?.count ?? 0,
+                reactedByMe: state?.reactedByMe ?? false,
+            };
+        }),
+    );
 
     function getReactionState(kind: ReactionKind) {
         return reactionStateMap.get(kind) ?? { count: 0, reactedByMe: false };
@@ -348,7 +353,7 @@
                 style={getReactionButtonStyle(reaction)}
                 aria-pressed={reaction.reactedByMe}
                 title={reaction.label}
-                on:click={(event) =>
+                onclick={(event) =>
                     handleToggle(
                         reaction.kind,
                         event.currentTarget as HTMLButtonElement,
@@ -362,8 +367,7 @@
                     data-reaction-glow
                     aria-hidden="true"
                 ></span>
-                <svelte:component
-                    this={reaction.icon}
+                <reaction.icon
                     class={clsx(
                         "reaction-icon relative z-10 h-4 w-4",
                         reaction.reactedByMe && "fill-current",

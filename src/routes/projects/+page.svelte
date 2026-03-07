@@ -1,5 +1,6 @@
 <script lang="ts">
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
+    import type { PageProps } from "./$types";
     import type {
         ProjectHelpType,
         ProjectStage,
@@ -7,36 +8,10 @@
     } from "$lib/shared/domain";
     import { Search, Filter, Plus } from "lucide-svelte";
 
-    export let data: {
-        query: string;
-        projects: Array<{
-            id: string;
-            ownerId: string;
-            ownerName: string | null;
-            ownerAvatarUrl: string | null;
-            title: string;
-            oneLiner: string;
-            problemStatement: string;
-            projectStage: ProjectStage | null;
-            helpTypes: ProjectHelpType[];
-            helpRequest: string;
-            highlights: string[];
-            nextMilestone: string;
-            feedbackRequest: string;
-            backgroundNote: string;
-            publicUrl?: string;
-            repoUrl?: string;
-            demoUrl?: string;
-            tags: string[];
-            images: string[];
-            status: ProjectStatus;
-            createdAt: string;
-            updatedAt: string;
-        }>;
-    };
+    let { data }: PageProps = $props();
 
-    let sort = "updated_desc";
-    $: sortedProjects = [...data.projects].sort((a, b) => {
+    let sort = $state("updated_desc");
+    let sortedProjects = $derived([...data.projects].sort((a, b) => {
         if (sort === "newest") {
             return (
                 new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -46,7 +21,7 @@
         return (
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
-    });
+    }));
 </script>
 
 <div>

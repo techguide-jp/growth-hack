@@ -1,11 +1,10 @@
 <script lang="ts">
     import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import type { PageProps } from "./$types";
     import type { TimelinePostView } from "$lib/shared/timeline";
     import { ArrowLeft } from "lucide-svelte";
 
-    export let data: {
-        post: TimelinePostView;
-    };
+    let { data }: PageProps = $props();
 </script>
 
 <div class="mx-auto max-w-3xl space-y-6">

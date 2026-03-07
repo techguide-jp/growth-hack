@@ -12,20 +12,24 @@
         ownerAvatarUrl?: string | null;
     };
 
-    export let project: ProjectSupportPanelProject;
+    interface Props {
+        project: ProjectSupportPanelProject;
+    }
 
-    let amount = 1000;
-    let message = "";
-    let showForm = false;
+    let { project }: Props = $props();
 
-    $: isOwner = $currentUser?.id === project.ownerId;
-    $: loginHref = `/login?next=${encodeURIComponent(`/projects/${project.id}`)}`;
-    $: records = $supportRecords.filter((r) => r.projectId === project.id);
-    $: confirmedRecords = records.filter((r) => r.status === "confirmed");
-    $: totalAmount = confirmedRecords.reduce((sum, r) => sum + r.amount, 0);
+    let amount = $state(1000);
+    let message = $state("");
+    let showForm = $state(false);
+
+    let isOwner = $derived($currentUser?.id === project.ownerId);
+    let loginHref = $derived(`/login?next=${encodeURIComponent(`/projects/${project.id}`)}`);
+    let records = $derived($supportRecords.filter((r) => r.projectId === project.id));
+    let confirmedRecords = $derived(records.filter((r) => r.status === "confirmed"));
+    let totalAmount = $derived(confirmedRecords.reduce((sum, r) => sum + r.amount, 0));
 
     // Sort: awaiting_owner first, then new to old
-    $: sortedRecords = [...records].sort((a, b) => {
+    let sortedRecords = $derived([...records].sort((a, b) => {
         if (a.status === "awaiting_owner" && b.status !== "awaiting_owner")
             return -1;
         if (a.status !== "awaiting_owner" && b.status === "awaiting_owner")
@@ -33,7 +37,7 @@
         return (
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-    });
+    }));
 
     function handleSubmit() {
         if (!$currentUser) return;
@@ -107,7 +111,7 @@
         <div class="text-center">
             <button
                 class="inline-flex items-center px-6 py-3 border border-transparent shadow-sm text-base font-bold rounded-md text-white bg-pink-600 hover:bg-pink-700"
-                on:click={() => (showForm = true)}
+                onclick={() => (showForm = true)}
             >
                 <Gift class="w-5 h-5 mr-2" />
                 支援しました！ (記録をつける)
@@ -148,11 +152,11 @@
                 <div class="flex justify-end gap-2 pt-2">
                     <button
                         class="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
-                        on:click={() => (showForm = false)}>キャンセル</button
+                        onclick={() => (showForm = false)}>キャンセル</button
                     >
                     <button
                         class="px-4 py-2 bg-pink-600 text-white rounded-md text-sm font-bold shadow hover:bg-pink-700"
-                        on:click={handleSubmit}>記録する</button
+                        onclick={handleSubmit}>記録する</button
                     >
                 </div>
             </div>
@@ -223,7 +227,7 @@
                 {#if isOwner && record.status === "awaiting_owner"}
                     <button
                         class="flex-shrink-0 ml-2 px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 shadow-sm"
-                        on:click={() => handleConfirm(record.id)}
+                        onclick={() => handleConfirm(record.id)}
                     >
                         受け取り確認
                     </button>

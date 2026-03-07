@@ -8,7 +8,7 @@
     } from "$lib/stores/mock";
     import { MessageSquare, Users, UserRound, ChevronRight } from "lucide-svelte";
 
-    $: myConversations = [...$conversations]
+    let myConversations = $derived([...$conversations]
         .filter((conversation) =>
             conversation.memberIds.includes($currentUser?.id ?? ""),
         )
@@ -16,7 +16,7 @@
             (a, b) =>
                 new Date(b.lastMessageAt).getTime() -
                 new Date(a.lastMessageAt).getTime(),
-        );
+        ));
 
     function getPartnerName(memberIds: string[]) {
         const partnerId = memberIds.find((id) => id !== $currentUser?.id);

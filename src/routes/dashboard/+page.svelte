@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import { sessionUser } from "$lib/stores/session";
     import {
         supportRecords,
@@ -9,6 +9,7 @@
     } from "$lib/stores/mock";
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
     import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import type { PageProps } from "./$types";
     import type {
         ProjectHelpType,
         ProjectStage,
@@ -17,42 +18,16 @@
     import type { TimelinePostView } from "$lib/shared/timeline";
     import { Plus, Gift, MessageSquare, HelpCircle } from "lucide-svelte";
 
-    export let data: {
-        myProjects: Array<{
-            id: string;
-            ownerId: string;
-            ownerName: string | null;
-            ownerAvatarUrl: string | null;
-            title: string;
-            oneLiner: string;
-            problemStatement: string;
-            projectStage: ProjectStage | null;
-            helpTypes: ProjectHelpType[];
-            helpRequest: string;
-            highlights: string[];
-            nextMilestone: string;
-            feedbackRequest: string;
-            backgroundNote: string;
-            publicUrl?: string;
-            repoUrl?: string;
-            demoUrl?: string;
-            tags: string[];
-            images: string[];
-            status: ProjectStatus;
-            createdAt: string;
-            updatedAt: string;
-        }>;
-        myUnresolvedQuestions: TimelinePostView[];
-    };
+    let { data }: PageProps = $props();
 
-    $: myProjectIds = data.myProjects.map((project) => project.id);
-    $: pendingSupports = $supportRecords.filter(
+    let myProjectIds = $derived(data.myProjects.map((project) => project.id));
+    let pendingSupports = $derived($supportRecords.filter(
         (record) =>
             myProjectIds.includes(record.projectId) &&
             record.status === "awaiting_owner",
-    );
+    ));
 
-    $: myConversations = $conversations
+    let myConversations = $derived($conversations
         .filter((conversation) =>
             conversation.memberIds.includes($sessionUser?.id ?? ""),
         )
@@ -60,9 +35,9 @@
             (a, b) =>
                 new Date(b.lastMessageAt).getTime() -
                 new Date(a.lastMessageAt).getTime(),
-        );
+        ));
 
-    $: focusModes = $page.data.preferences?.focusModes ?? [];
+    let focusModes = $derived(page.data.preferences?.focusModes ?? []);
 
     function getPartner(memberIds: string[]) {
         const partnerId = memberIds.find((id) => id !== $sessionUser?.id);

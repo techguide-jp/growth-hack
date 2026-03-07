@@ -1,6 +1,10 @@
 <script lang="ts">
-    export let id: string | undefined = undefined;
-    export let errors: string[] = [];
+    interface Props {
+        id?: string | undefined;
+        errors?: string[];
+    }
+
+    let { id = undefined, errors = [] }: Props = $props();
 </script>
 
 {#if errors.length > 0}

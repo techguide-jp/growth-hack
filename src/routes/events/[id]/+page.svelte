@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import {
         Calendar,
         MapPin,
@@ -35,15 +35,15 @@
         return `${formatter.format(new Date(startAt))} - ${formatter.format(new Date(endAt))}`;
     }
 
-    $: eventId = $page.params.id ?? "";
-    $: event = MOCK_EVENTS.find((item) => item.id === eventId);
-    $: latestPosts = event
+    let eventId = $derived(page.params.id ?? "");
+    let event = $derived(MOCK_EVENTS.find((item) => item.id === eventId));
+    let latestPosts = $derived(event
         ? [...event.roomPosts].sort(
               (a, b) =>
                   new Date(b.createdAt).getTime() -
                   new Date(a.createdAt).getTime(),
           )
-        : [];
+        : []);
 </script>
 
 {#if event}

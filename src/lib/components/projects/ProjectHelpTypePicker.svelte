@@ -2,11 +2,21 @@
     import type { ProjectHelpType } from "$lib/shared/domain";
     import { PROJECT_HELP_TYPE_OPTIONS } from "$lib/constants/project";
 
-    export let name = "helpTypes";
-    export let value: ProjectHelpType[] = [];
-    export let maxSelections = 3;
-    export let invalid = false;
-    export let describedBy: string | undefined = undefined;
+    interface Props {
+        name?: string;
+        value?: ProjectHelpType[];
+        maxSelections?: number;
+        invalid?: boolean;
+        describedBy?: string | undefined;
+    }
+
+    let {
+        name = "helpTypes",
+        value = $bindable([]),
+        maxSelections = 3,
+        invalid = false,
+        describedBy = undefined
+    }: Props = $props();
 
     function toggle(option: ProjectHelpType) {
         if (value.includes(option)) {
@@ -38,7 +48,7 @@
                     : 'border-gray-200 bg-white hover:border-gray-300'} {disabled
                     ? 'cursor-not-allowed opacity-60'
                     : ''}"
-                on:click={() => toggle(option.value)}
+                onclick={() => toggle(option.value)}
                 aria-pressed={selected}
                 disabled={disabled}
             >

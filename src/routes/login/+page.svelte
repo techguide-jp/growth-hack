@@ -1,11 +1,12 @@
 <script lang="ts">
     import { authClient } from "$lib/auth-client";
+    import type { PageProps } from "./$types";
 
-    export let data: { next: string };
+    let { data }: PageProps = $props();
 
-    const next = data?.next ?? "/dashboard";
-    let pendingProvider: "google" | "github" | null = null;
-    let errorMessage = "";
+    let next = $derived(data.next ?? "/dashboard");
+    let pendingProvider: "google" | "github" | null = $state(null);
+    let errorMessage = $state("");
 
     const loginOptions = [
         {
@@ -57,7 +58,7 @@
                     type="button"
                     class={`w-full inline-flex items-center justify-center rounded-lg px-4 py-3 font-semibold transition ${option.color}`}
                     disabled={pendingProvider !== null}
-                    on:click={() => handleSocialLogin(option.provider)}
+                    onclick={() => handleSocialLogin(option.provider)}
                 >
                     {pendingProvider === option.provider
                         ? "リダイレクト中..."

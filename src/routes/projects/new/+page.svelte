@@ -1,19 +1,11 @@
 <script lang="ts">
     import ProjectEditorForm from "$lib/components/projects/ProjectEditorForm.svelte";
+    import type { PageProps } from "./$types";
     import type { MediaStorageDriver } from "$lib/shared/media/config";
     import type { ProjectFormSubmissionState } from "$lib/shared/project-form";
     import { ArrowLeft } from "lucide-svelte";
 
-    export let data: {
-        draftProjectId: string;
-        mediaUpload: {
-            driver: MediaStorageDriver;
-            supportsDirectUpload: boolean;
-            userId: string;
-        };
-    };
-
-    export let form: ProjectFormSubmissionState | undefined;
+    let { data, form }: PageProps = $props();
 </script>
 
 <div class="max-w-5xl mx-auto py-6">
@@ -33,7 +25,7 @@
 
     <ProjectEditorForm
         mode="create"
-        {form}
+        form={form as ProjectFormSubmissionState | undefined}
         uploadContext={{
             ...data.mediaUpload,
             projectId: form?.values?.draftProjectId ?? data.draftProjectId,
