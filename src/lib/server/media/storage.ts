@@ -69,10 +69,7 @@ function isServerlessBundleFilesystem() {
 function getConfiguredMediaStorageDriver() {
   const configuredDriver = process.env.MEDIA_STORAGE_DRIVER?.trim();
 
-  if (
-    configuredDriver === "local" ||
-    configuredDriver === "vercel-blob"
-  ) {
+  if (configuredDriver === "local" || configuredDriver === "vercel-blob") {
     return configuredDriver;
   }
 

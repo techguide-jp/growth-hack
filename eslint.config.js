@@ -14,7 +14,13 @@ const localPlugin = {
 
 export default [
   {
-    ignores: [".svelte-kit/**", "build/**", "dist/**", "coverage/**"],
+    ignores: [
+      ".svelte-kit/**",
+      ".vercel/**",
+      "build/**",
+      "dist/**",
+      "coverage/**",
+    ],
   },
   {
     ...js.configs.recommended,
