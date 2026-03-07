@@ -221,6 +221,11 @@
     let isPreparingScreenshots = false;
     let imageMessage = "";
     let uploadedImageUrls: string[] = [];
+    let pendingUploadCount = 0;
+    let localPendingFiles: File[] = [];
+    let shouldDisableScreenshotActions = false;
+    let hasScheduledLeaveCleanup = false;
+    let currentUploadAbortController: AbortController | null = null;
     const screenshotSizeLimitInMb = Math.floor(
         PROJECT_SCREENSHOT_MAX_SIZE_BYTES / 1024 / 1024,
     );
@@ -314,6 +319,11 @@
     }
 
     async function clearPendingScreenshots() {
+        if (shouldDisableScreenshotActions) {
+            imageMessage = "スクリーンショットの処理が完了してからクリアしてください。";
+            return;
+        }
+
         releaseLocalPreparedImages(localPreparedImages);
         localPreparedImages = [];
 
@@ -331,6 +341,23 @@
 
         if (screenshotInput) {
             screenshotInput.value = "";
+        }
+    }
+
+    function scheduleLeaveCleanup() {
+        if (
+            hasScheduledLeaveCleanup ||
+            isSubmitting ||
+            (uploadedImageUrls.length === 0 && !currentUploadAbortController)
+        ) {
+            return;
+        }
+
+        hasScheduledLeaveCleanup = true;
+        currentUploadAbortController?.abort();
+
+        if (uploadedImageUrls.length > 0) {
+            void cleanupUploadedImages(uploadedImageUrls, true);
         }
     }
 
@@ -355,6 +382,8 @@
             };
 
             uploadedImages = [...uploadedImages, uploadingImage];
+            const abortController = new AbortController();
+            currentUploadAbortController = abortController;
 
             try {
                 const result = await upload(
@@ -365,6 +394,7 @@
                     preparedImage.file,
                     {
                         access: "public",
+                        abortSignal: abortController.signal,
                         clientPayload,
                         handleUploadUrl: "/api/uploads/images",
                         onUploadProgress: (event) => {
@@ -397,6 +427,10 @@
                 releasePreparedProjectScreenshotFile(preparedImage.previewUrl);
                 uploadedImages = uploadedImages.filter((image) => image.id !== imageId);
                 throw error;
+            } finally {
+                if (currentUploadAbortController === abortController) {
+                    currentUploadAbortController = null;
+                }
             }
         }
     }
@@ -472,10 +506,9 @@
     $: uploadedImageUrls = uploadedImages
         .filter((image) => image.status === "uploaded")
         .map((image) => image.url);
-    $: pendingUploadCount = uploadedImages.filter(
-        (image) => image.status === "uploading",
-    ).length;
+    $: pendingUploadCount = uploadedImages.filter((image) => image.status === "uploading").length;
     $: localPendingFiles = localPreparedImages.map((image) => image.file);
+    $: shouldDisableScreenshotActions = isPreparingScreenshots || pendingUploadCount > 0;
     $: publishChecklist = getProjectPublishChecklist({
         highlights,
         nextMilestone,
@@ -505,12 +538,12 @@
             return;
         }
 
-        const handlePageHide = () => {
-            if (isSubmitting || uploadedImageUrls.length === 0) {
+        const handlePageHide = (event: PageTransitionEvent) => {
+            if (event.persisted) {
                 return;
             }
 
-            void cleanupUploadedImages(uploadedImageUrls, true);
+            scheduleLeaveCleanup();
         };
 
         window.addEventListener("pagehide", handlePageHide);
@@ -521,6 +554,7 @@
     });
 
     onDestroy(() => {
+        scheduleLeaveCleanup();
         releaseLocalPreparedImages(localPreparedImages);
 
         for (const image of uploadedImages) {
@@ -818,6 +852,7 @@
                     {#if localPreparedImages.length > 0 || uploadedImages.length > 0}
                         <button
                             type="button"
+                            disabled={shouldDisableScreenshotActions}
                             class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
                             on:click={clearPendingScreenshots}
                         >
@@ -833,6 +868,7 @@
                     type="file"
                     multiple
                     accept={PROJECT_SCREENSHOT_FILE_INPUT_ACCEPT}
+                    disabled={shouldDisableScreenshotActions}
                     class="block w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-bold file:text-white hover:file:bg-indigo-700"
                     on:change={handleScreenshotSelection}
                 />

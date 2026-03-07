@@ -1,7 +1,10 @@
 import { fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import { requireOnboarded } from "$lib/server/auth/guards";
-import { createProject } from "$lib/server/repositories/projects";
+import {
+  createProject,
+  getProjectById,
+} from "$lib/server/repositories/projects";
 import { getMediaUploadConfig } from "$lib/server/media/storage";
 import {
   getProjectFormValues,
@@ -10,6 +13,7 @@ import {
   validateProjectFormValues,
 } from "$lib/server/projects/form";
 import {
+  cleanupProjectScreenshotFiles,
   getProjectScreenshotFiles,
   parseUploadedProjectScreenshotUrls,
   parseKeptProjectScreenshotUrls,
@@ -57,6 +61,27 @@ export const actions: Actions = {
         message:
           "スクリーンショット情報の読み取りに失敗しました。画面を再読み込みしてやり直してください。",
         values,
+      });
+    }
+
+    const duplicateDraftProject = await getProjectById(draftProjectIdResult.data);
+
+    if (duplicateDraftProject) {
+      await cleanupProjectScreenshotFiles({
+        userId: user.id,
+        projectId: draftProjectIdResult.data,
+        imageUrls: uploadedImageUrls,
+      }).catch(() => undefined);
+
+      return fail(400, {
+        message:
+          "下書きIDが競合しました。画像を含めて再作成するため、もう一度保存してください。",
+        values: {
+          ...values,
+          draftProjectId: crypto.randomUUID(),
+          keptImagesJson: JSON.stringify([]),
+          uploadedImagesJson: JSON.stringify([]),
+        },
       });
     }
 

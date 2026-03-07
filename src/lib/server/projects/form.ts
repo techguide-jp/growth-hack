@@ -2,9 +2,9 @@ import {
   getProjectPublishChecklist,
   type ProjectPublishChecklistItem,
 } from "$lib/constants/project";
+import { z } from "zod";
 import {
   createProjectInputSchema,
-  entityIdSchema,
   type CreateProjectInput,
   type ProjectStatus,
 } from "$lib/shared/domain";
@@ -89,7 +89,7 @@ export function getProjectFormValues(formData: FormData): ProjectFormValues {
 }
 
 export function validateProjectDraftId(value: string) {
-  return entityIdSchema.safeParse(value.trim());
+  return z.string().uuid().safeParse(value.trim());
 }
 
 export function resolveTargetStatus(
