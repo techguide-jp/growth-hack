@@ -6,10 +6,18 @@
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
 
-    export let project: Project;
+    type ProjectCardProject = Project & {
+        ownerName?: string | null;
+        ownerAvatarUrl?: string | null;
+    };
+
+    export let project: ProjectCardProject;
 
     $: ownerStore = getUser(project.ownerId);
-    $: owner = $ownerStore;
+    $: owner = {
+        name: project.ownerName ?? $ownerStore?.name,
+        avatarUrl: project.ownerAvatarUrl ?? $ownerStore?.avatarUrl,
+    };
     $: statusInfo = getProjectStatusInfo(project.status);
 </script>
 

@@ -1,4 +1,4 @@
-import type { ProjectStatus } from "$lib/stores/mock/data";
+import type { ProjectStatus } from "$lib/shared/domain";
 
 export interface ProjectStatusInfo {
   label: string;

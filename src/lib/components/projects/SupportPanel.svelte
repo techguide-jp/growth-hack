@@ -5,7 +5,12 @@
     import clsx from "clsx";
     import { format } from "date-fns";
 
-    export let project: Project;
+    type ProjectSupportPanelProject = Project & {
+        ownerName?: string | null;
+        ownerAvatarUrl?: string | null;
+    };
+
+    export let project: ProjectSupportPanelProject;
 
     let amount = 1000;
     let message = "";

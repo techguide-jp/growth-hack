@@ -1,63 +1,37 @@
 <script lang="ts">
-    import { api, currentUser } from "$lib/stores/mock";
-    import type { ProjectStatus } from "$lib/stores/mock/data";
+    import type { ProjectStatus } from "$lib/shared/domain";
     import { PROJECT_STATUS_MAP, getProjectStatusInfo } from "$lib/constants/project";
-    import { goto } from "$app/navigation";
     import { ArrowLeft } from "lucide-svelte";
 
     const statusKeys = Object.keys(PROJECT_STATUS_MAP) as ProjectStatus[];
 
-    let title = "";
-    let summary = "";
-    let description = "";
-    let publicUrl = "";
-    let repoUrl = "";
-    let tagsInput = "";
-    let status: ProjectStatus = "draft";
-    let errorMessage = "";
+    export let form:
+        | {
+              message?: string;
+              values?: {
+                  title?: string;
+                  summary?: string;
+                  description?: string;
+                  publicUrl?: string;
+                  repoUrl?: string;
+                  demoUrl?: string;
+                  tags?: string;
+                  status?: string;
+              };
+          }
+        | undefined;
+
+    let title = form?.values?.title ?? "";
+    let summary = form?.values?.summary ?? "";
+    let description = form?.values?.description ?? "";
+    let publicUrl = form?.values?.publicUrl ?? "";
+    let repoUrl = form?.values?.repoUrl ?? "";
+    let tagsInput = form?.values?.tags ?? "";
+    let status: ProjectStatus =
+        (form?.values?.status as ProjectStatus | undefined) ?? "draft";
     let isSubmitting = false;
 
     $: selectedStatus = getProjectStatusInfo(status);
-
-    function normalizeTags(value: string): string[] {
-        return value
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter((tag) => tag.length > 0);
-    }
-
-    function handleSubmit() {
-        if (isSubmitting) return;
-        errorMessage = "";
-
-        const titleTrimmed = title.trim();
-        const summaryTrimmed = summary.trim();
-        const descriptionTrimmed = description.trim();
-
-        if (!titleTrimmed || !summaryTrimmed || !descriptionTrimmed) {
-            errorMessage = "タイトル、要約、詳細説明はすべて入力してください。";
-            return;
-        }
-
-        if (!$currentUser) {
-            errorMessage = "ログイン情報を取得できませんでした。再度ログインしてください。";
-            return;
-        }
-
-        isSubmitting = true;
-        const projectId = api.createProject({
-            ownerId: $currentUser.id,
-            title: titleTrimmed,
-            summary: summaryTrimmed,
-            description: descriptionTrimmed,
-            status,
-            publicUrl: publicUrl.trim() || undefined,
-            repoUrl: repoUrl.trim() || undefined,
-            tags: normalizeTags(tagsInput),
-        });
-
-        goto(`/projects/${projectId}`);
-    }
 </script>
 
 <div class="max-w-3xl mx-auto py-6">
@@ -74,10 +48,7 @@
             作品の内容を登録すると、ここから公開表示されるページが作成できます。
         </p>
 
-        <form
-            on:submit|preventDefault={handleSubmit}
-            class="mt-6 space-y-5"
-        >
+        <form method="POST" class="mt-6 space-y-5" on:submit={() => (isSubmitting = true)}>
             <div class="space-y-2">
                 <label class="block text-sm font-bold text-gray-700" for="title"
                     >プロジェクト名</label
@@ -194,8 +165,8 @@
                 </div>
             </div>
 
-            {#if errorMessage}
-                <p class="text-sm text-red-600">{errorMessage}</p>
+            {#if form?.message}
+                <p class="text-sm text-red-600">{form.message}</p>
             {/if}
 
             <button
