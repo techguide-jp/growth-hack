@@ -26,7 +26,10 @@ import {
   type TimelineReactionSummary,
   type TimelineScope,
 } from "$lib/shared/timeline";
-import { getProjectById } from "$lib/server/repositories/projects";
+import {
+  getProjectById,
+  isProjectMember,
+} from "$lib/server/repositories/projects";
 
 type ProjectRecord = typeof projects.$inferSelect;
 type TimelinePostRecord = typeof timelinePosts.$inferSelect;
@@ -748,6 +751,13 @@ export async function createTimelinePost(
         "公開中のプロジェクトのみ関連付けできます。",
       );
     }
+
+    if (!(await isProjectMember(input.projectId, authorUserId))) {
+      throw new TimelineRepositoryError(
+        403,
+        "関連付けるには対象プロジェクトのメンバーである必要があります。",
+      );
+    }
   }
 
   await db.insert(timelinePosts).values({
@@ -784,7 +794,11 @@ export async function createComment(
   const commentId = crypto.randomUUID();
   const now = new Date();
 
-  await assertCommentTargetExists(input.targetType, input.targetId, authorUserId);
+  await assertCommentTargetExists(
+    input.targetType,
+    input.targetId,
+    authorUserId,
+  );
 
   await db.insert(comments).values({
     id: commentId,
@@ -799,6 +813,7 @@ export async function createComment(
   const [comment] = await listCommentsForTarget(
     input.targetType,
     input.targetId,
+    authorUserId,
   ).then((rows) => rows.filter((row) => row.id === commentId));
 
   if (!comment) {

@@ -42,6 +42,29 @@
         }));
     }
 
+    function mergeLoadedComments(
+        currentValue: TimelineCommentView[],
+        incomingValue: TimelineCommentView[],
+        nextAcceptedCommentId: string | null,
+    ) {
+        const mergedById = new Map(
+            currentValue.map((comment) => [comment.id, { ...comment }]),
+        );
+
+        for (const comment of incomingValue) {
+            mergedById.set(comment.id, { ...comment });
+        }
+
+        return syncAcceptedComment(
+            [...mergedById.values()].sort(
+                (left, right) =>
+                    new Date(left.createdAt).getTime() -
+                    new Date(right.createdAt).getTime(),
+            ),
+            nextAcceptedCommentId,
+        );
+    }
+
     function getCommentSignature(value: TimelineCommentView[]) {
         return value
             .map(
@@ -72,8 +95,9 @@
             showAll = showAll || defaultShowAll || hasFullComments;
 
             if (hasLoadedAllComments && !hasFullComments) {
-                currentComments = syncAcceptedComment(
+                currentComments = mergeLoadedComments(
                     currentComments,
+                    comments,
                     acceptedCommentId,
                 );
                 currentCommentCount = Math.max(commentCount, currentComments.length);
