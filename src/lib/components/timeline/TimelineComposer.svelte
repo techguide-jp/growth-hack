@@ -1,37 +1,31 @@
 <script lang="ts">
-    import { api, currentUser, projects } from "$lib/stores/mock";
+    import { invalidate } from "$app/navigation";
+    import { page } from "$app/stores";
+    import { sessionUser } from "$lib/stores/session";
+    import type { TimelinePostType } from "$lib/shared/domain";
+    import { TIMELINE_INVALIDATION_KEY } from "$lib/shared/timeline";
     import { Rocket, HelpCircle, Trophy } from "lucide-svelte";
     import clsx from "clsx";
-    import type { PostType } from "$lib/stores/mock/data";
 
-    let type: PostType = "progress";
+    type TimelineComposerProject = {
+        id: string;
+        title: string;
+    };
+
+    export let projects: TimelineComposerProject[] = [];
+    export let invalidateKey: string = TIMELINE_INVALIDATION_KEY;
+
+    let type: TimelinePostType = "progress";
     let body = "";
     let title = "";
     let meta = { situation: "", problem: "", tried: "", environment: "" };
     let selectedProjectId = "";
+    let errorMessage = "";
+    let isSubmitting = false;
 
-    $: myProjects = $projects.filter((p) => p.ownerId === $currentUser?.id);
-    $: loginHref = `/login?next=${encodeURIComponent("/timeline")}`;
-
-    function handleSubmit() {
-        if (!body && type !== "question") return;
-        if (!$currentUser) return;
-
-        api.addPost({
-            authorId: $currentUser.id,
-            type,
-            title: type !== "progress" ? title : undefined,
-            body,
-            projectId: selectedProjectId || undefined,
-            questionMeta: type === "question" ? { ...meta } : undefined,
-            status: type === "question" ? "open" : undefined,
-        });
-
-        body = "";
-        title = "";
-        meta = { situation: "", problem: "", tried: "", environment: "" };
-        selectedProjectId = "";
-    }
+    $: loginHref = `/login?next=${encodeURIComponent(
+        `${$page.url.pathname}${$page.url.search}`,
+    )}`;
 
     const TYPES = [
         {
@@ -53,6 +47,49 @@
             color: "text-yellow-600 bg-yellow-50",
         },
     ] as const;
+
+    async function handleSubmit() {
+        if (!$sessionUser || isSubmitting) {
+            return;
+        }
+
+        errorMessage = "";
+        isSubmitting = true;
+
+        try {
+            const response = await fetch("/api/timeline", {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    type,
+                    title: type !== "progress" ? title : undefined,
+                    body,
+                    projectId: selectedProjectId || undefined,
+                    questionMeta: type === "question" ? { ...meta } : undefined,
+                }),
+            });
+
+            const payload = (await response.json().catch(() => null)) as
+                | { message?: string }
+                | null;
+
+            if (!response.ok) {
+                errorMessage =
+                    payload?.message ?? "投稿の保存に失敗しました。";
+                return;
+            }
+
+            body = "";
+            title = "";
+            meta = { situation: "", problem: "", tried: "", environment: "" };
+            selectedProjectId = "";
+            await invalidate(invalidateKey);
+        } finally {
+            isSubmitting = false;
+        }
+    }
 </script>
 
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
@@ -65,6 +102,7 @@
                         ? `${t.color} border-current ring-1 ring-inset`
                         : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50",
                 )}
+                disabled={isSubmitting}
                 on:click={() => (type = t.id)}
             >
                 <svelte:component this={t.icon} class="w-4 h-4" />
@@ -73,17 +111,17 @@
         {/each}
     </div>
 
-    {#if $currentUser}
+    {#if $sessionUser}
         <form on:submit|preventDefault={handleSubmit} class="space-y-3">
-            {#if myProjects.length > 0}
+            {#if projects.length > 0}
                 <div>
                     <select
                         bind:value={selectedProjectId}
                         class="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-full md:w-auto"
                     >
                         <option value="">(プロジェクトに関連付ける)</option>
-                        {#each myProjects as p}
-                            <option value={p.id}>{p.title}</option>
+                        {#each projects as project}
+                            <option value={project.id}>{project.title}</option>
                         {/each}
                     </select>
                 </div>
@@ -186,12 +224,17 @@
                 ></textarea>
             {/if}
 
+            {#if errorMessage}
+                <p class="text-sm text-rose-600">{errorMessage}</p>
+            {/if}
+
             <div class="flex justify-end pt-2">
                 <button
                     type="submit"
-                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    disabled={isSubmitting}
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                    投稿する
+                    {isSubmitting ? "送信中..." : "投稿する"}
                 </button>
             </div>
         </form>

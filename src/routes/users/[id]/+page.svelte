@@ -1,12 +1,11 @@
 <script lang="ts">
-    import { page } from "$app/stores";
-    import {
-        users,
-        projects,
-        timelinePosts,
-        supportRecords,
-        userPreferences,
-    } from "$lib/stores/mock";
+    import type {
+        ProjectHelpType,
+        ProjectStage,
+        ProjectStatus,
+    } from "$lib/shared/domain";
+    import type { FocusMode } from "$lib/shared/settings";
+    import type { TimelinePostView } from "$lib/shared/timeline";
     import { FolderKanban, Rocket, Gift, Calendar } from "lucide-svelte";
 
     function formatDateTime(value: string) {
@@ -25,50 +24,64 @@
         showcase: "見せびらかし",
     };
 
-    $: userId = $page.params.id ?? "";
-    $: profile = $users.find((user) => user.id === userId);
-    $: userProjects = [...$projects]
-        .filter((project) => project.ownerId === userId)
-        .sort(
-            (a, b) =>
-                new Date(b.updatedAt).getTime() -
-                new Date(a.updatedAt).getTime(),
-        );
-    $: recentPosts = [...$timelinePosts]
-        .filter((post) => post.authorId === userId)
-        .sort(
-            (a, b) =>
-                new Date(b.createdAt).getTime() -
-                new Date(a.createdAt).getTime(),
-        )
-        .slice(0, 5);
-    $: focusModes =
-        $userPreferences.find((pref) => pref.userId === userId)?.focusModes ?? [];
-
-    $: projectIds = userProjects.map((project) => project.id);
-    $: totalConfirmedSupport = $supportRecords
-        .filter(
-            (record) =>
-                projectIds.includes(record.projectId) &&
-                record.status === "confirmed",
-        )
-        .reduce((sum, record) => sum + record.amount, 0);
+    export let data: {
+        profile: {
+            id: string;
+            email: string | null;
+            name: string;
+            avatarUrl: string | null;
+        } | null;
+        userProjects: Array<{
+            id: string;
+            ownerId: string;
+            ownerName: string | null;
+            ownerAvatarUrl: string | null;
+            title: string;
+            oneLiner: string;
+            problemStatement: string;
+            projectStage: ProjectStage | null;
+            helpTypes: ProjectHelpType[];
+            helpRequest: string;
+            highlights: string[];
+            nextMilestone: string;
+            feedbackRequest: string;
+            backgroundNote: string;
+            publicUrl?: string;
+            repoUrl?: string;
+            demoUrl?: string;
+            tags: string[];
+            images: string[];
+            status: ProjectStatus;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+        recentPosts: TimelinePostView[];
+        focusModes: FocusMode[];
+        totalConfirmedSupport: number;
+    };
 </script>
 
-{#if profile}
+{#if data.profile}
     <div class="max-w-5xl mx-auto py-8 space-y-8">
         <section class="bg-white rounded-xl border border-gray-200 p-6">
             <div class="flex flex-col md:flex-row md:items-center gap-5">
                 <img
-                    src={profile.avatarUrl}
+                    src={data.profile.avatarUrl ||
+                        `https://i.pravatar.cc/150?u=${encodeURIComponent(data.profile.id)}`}
                     alt=""
                     class="w-20 h-20 rounded-full border border-gray-200"
                 />
                 <div class="flex-1">
-                    <h1 class="text-3xl font-bold text-gray-900">{profile.name}</h1>
-                    <p class="text-sm text-gray-500 mt-1">{profile.email}</p>
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        {data.profile.name}
+                    </h1>
+                    {#if data.profile.email}
+                        <p class="text-sm text-gray-500 mt-1">
+                            {data.profile.email}
+                        </p>
+                    {/if}
                     <div class="flex flex-wrap gap-2 mt-3">
-                        {#each focusModes as mode}
+                        {#each data.focusModes as mode}
                             <span
                                 class="px-2.5 py-1 rounded-full text-xs bg-indigo-50 text-indigo-700 border border-indigo-100"
                             >
@@ -80,13 +93,13 @@
                 <div class="grid grid-cols-2 gap-3 text-center">
                     <div class="rounded-lg bg-gray-50 px-4 py-3 min-w-[120px]">
                         <div class="text-xl font-black text-gray-900">
-                            {userProjects.length}
+                            {data.userProjects.length}
                         </div>
                         <div class="text-xs text-gray-500">Projects</div>
                     </div>
                     <div class="rounded-lg bg-gray-50 px-4 py-3 min-w-[120px]">
                         <div class="text-xl font-black text-gray-900">
-                            ¥{totalConfirmedSupport.toLocaleString()}
+                            ¥{data.totalConfirmedSupport.toLocaleString()}
                         </div>
                         <div class="text-xs text-gray-500">Confirmed Support</div>
                     </div>
@@ -100,7 +113,7 @@
                 プロジェクト
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {#each userProjects as project}
+                {#each data.userProjects as project}
                     <a
                         href="/projects/{project.id}"
                         class="rounded-lg border border-gray-200 p-4 hover:bg-gray-50 transition-colors"
@@ -112,7 +125,7 @@
                             </span>
                         </div>
                         <p class="text-sm text-gray-600 mb-3 line-clamp-2">
-                            {project.summary}
+                            {project.oneLiner}
                         </p>
                         <div class="text-xs text-gray-400">
                             更新: {formatDateTime(project.updatedAt)}
@@ -120,8 +133,10 @@
                     </a>
                 {/each}
             </div>
-            {#if userProjects.length === 0}
-                <p class="text-sm text-gray-500">公開中のプロジェクトはありません。</p>
+            {#if data.userProjects.length === 0}
+                <p class="text-sm text-gray-500">
+                    表示できるプロジェクトはありません。
+                </p>
             {/if}
         </section>
 
@@ -131,7 +146,7 @@
                 最近の投稿
             </h2>
             <div class="space-y-3">
-                {#each recentPosts as post}
+                {#each data.recentPosts as post}
                     <article class="rounded-lg border border-gray-100 p-4 bg-gray-50/70">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-xs font-semibold text-indigo-600">
@@ -149,7 +164,7 @@
                     </article>
                 {/each}
             </div>
-            {#if recentPosts.length === 0}
+            {#if data.recentPosts.length === 0}
                 <p class="text-sm text-gray-500">投稿はまだありません。</p>
             {/if}
         </section>

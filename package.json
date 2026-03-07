@@ -66,6 +66,7 @@
     "drizzle-orm": "0.41.0",
     "heic-to": "^1.4.2",
     "lucide-svelte": "^0.562.0",
+    "motion": "^12.35.1",
     "postgres": "^3.4.5",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.0",

@@ -18,6 +18,7 @@
         getProjectSuccessToastMessage,
         type ProjectSuccessToast,
     } from "$lib/shared/project-form";
+    import type { TimelineReactionSummary } from "$lib/shared/timeline";
     import {
         Github,
         Globe,
@@ -34,6 +35,7 @@
 
     export let data: {
         canEdit: boolean;
+        projectReactions: TimelineReactionSummary[];
         successToast: ProjectSuccessToast | null;
         project: {
             id: string;
@@ -291,7 +293,11 @@
         </div>
 
         <div class="mt-6">
-            <ReactionBar targetId={project.id} targetType="project" />
+            <ReactionBar
+                targetId={project.id}
+                targetType="project"
+                reactions={data.projectReactions}
+            />
         </div>
 
         {#if showOwnerChecklist}

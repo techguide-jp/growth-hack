@@ -1,20 +1,25 @@
 <script lang="ts">
-    import { getUser, getProject, api, currentUser } from "$lib/stores/mock";
-    import type { TimelinePost } from "$lib/stores/mock/data";
     import ReactionBar from "$lib/components/shared/ReactionBar.svelte";
     import CommentSection from "./CommentSection.svelte";
-    import { CheckCircle, Clock } from "lucide-svelte";
+    import {
+        TIMELINE_INVALIDATION_KEY,
+        type TimelinePostView,
+    } from "$lib/shared/timeline";
+    import { CheckCircle, Clock, MessageSquareText } from "lucide-svelte";
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
 
-    export let post: TimelinePost;
+    export let post: TimelinePostView;
     export let compact = false;
+    export let showDetailLink = true;
+    export let showAllComments = false;
+    export let invalidateKey: string | null = TIMELINE_INVALIDATION_KEY;
 
-    $: author = getUser(post.authorId);
-    $: project = post.projectId ? getProject(post.projectId) : null;
-    $: isQuestion = post.type === "question";
-    $: isSolved = isQuestion && post.status === "solved";
-    $: isMyPost = $currentUser?.id === post.authorId;
+    const POST_TYPE_LABEL: Record<TimelinePostView["type"], string> = {
+        progress: "進捗",
+        question: "相談",
+        showcase: "見せびらかし",
+    };
 
     function timeAgo(dateStr: string) {
         try {
@@ -27,9 +32,10 @@
         }
     }
 
-    function markSolved(commentId: string) {
-        api.solveQuestion(post.id, commentId);
-    }
+    $: isQuestion = post.type === "question";
+    $: isSolved = isQuestion && post.status === "solved";
+    $: detailHref = `/timeline/${post.id}`;
+    $: commentViews = showAllComments ? post.comments : post.commentsPreview;
 </script>
 
 <div
@@ -37,32 +43,32 @@
         compact ? "p-4 mb-3" : "p-5 mb-4"
     }`}
 >
-    <!-- Header -->
     <div class="flex items-start justify-between mb-3">
         <div class="flex items-center gap-3">
             <img
-                src={$author?.avatarUrl}
+                src={post.author.avatarUrl ||
+                    `https://i.pravatar.cc/150?u=${encodeURIComponent(post.author.id)}`}
                 alt=""
                 class="w-10 h-10 rounded-full border border-gray-100"
             />
             <div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                     <a
-                        href={$author ? `/users/${$author.id}` : "#"}
+                        href={`/users/${post.author.id}`}
                         class="font-bold text-gray-900 hover:text-indigo-600"
                     >
-                        {$author?.name ?? "Unknown"}
+                        {post.author.displayName}
                     </a>
-                    {#if $project}
+                    {#if post.project}
                         <a
-                            href="/projects/{$project.id}"
-                            class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium truncate max-w-[150px]"
+                            href={`/projects/${post.project.id}`}
+                            class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium truncate max-w-[180px]"
                         >
-                            {$project.title}
+                            {post.project.title}
                         </a>
                     {/if}
                 </div>
-                <div class="flex items-center text-xs text-gray-500 gap-2">
+                <div class="flex items-center text-xs text-gray-500 gap-2 flex-wrap">
                     <span>{timeAgo(post.createdAt)}</span>
                     {#if isQuestion}
                         {#if isSolved}
@@ -83,15 +89,13 @@
             </div>
         </div>
 
-        <!-- Type Badge -->
         <div
             class="text-xs font-bold uppercase tracking-wider px-2 py-1 rounded text-gray-500 bg-gray-100"
         >
-            {post.type}
+            {POST_TYPE_LABEL[post.type]}
         </div>
     </div>
 
-    <!-- Content -->
     <div class="mb-4">
         {#if post.title}
             <h3 class="text-lg font-bold text-gray-900 mb-2">{post.title}</h3>
@@ -117,19 +121,36 @@
         <p class="text-gray-700 whitespace-pre-wrap">{post.body}</p>
     </div>
 
-    <!-- Reactions & Actions -->
     <div
-        class="flex items-center justify-between border-t border-gray-100 pt-3"
+        class="flex flex-col gap-3 border-t border-gray-100 pt-3 md:flex-row md:items-center md:justify-between"
     >
-        <ReactionBar targetId={post.id} targetType="post" />
+        <ReactionBar
+            targetId={post.id}
+            targetType="timeline_post"
+            reactions={post.reactions}
+            {invalidateKey}
+        />
+
+        {#if showDetailLink}
+            <a
+                href={detailHref}
+                class="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+            >
+                <MessageSquareText class="w-4 h-4" />
+                詳細を見る
+            </a>
+        {/if}
     </div>
 
-    <!-- Comments -->
     <CommentSection
         targetId={post.id}
-        targetType="post"
-        canSolve={isQuestion && !isSolved && isMyPost}
+        targetType="timeline_post"
+        comments={commentViews}
+        commentCount={post.commentCount}
+        canSolve={post.viewerCanSolve}
         acceptedCommentId={post.acceptedCommentId}
-        onSolve={markSolved}
+        defaultShowAll={showAllComments}
+        hasFullComments={showAllComments}
+        {invalidateKey}
     />
 </div>

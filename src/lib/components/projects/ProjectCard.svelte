@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { getUser } from "$lib/stores/mock";
     import {
         getProjectHelpTypeInfo,
         getProjectStageInfo,
@@ -29,10 +28,11 @@
 
     export let project: ProjectCardProject;
 
-    $: ownerStore = getUser(project.ownerId);
     $: owner = {
-        name: project.ownerName ?? $ownerStore?.name,
-        avatarUrl: project.ownerAvatarUrl ?? $ownerStore?.avatarUrl,
+        name: project.ownerName ?? "Unknown",
+        avatarUrl:
+            project.ownerAvatarUrl ??
+            `https://i.pravatar.cc/150?u=${encodeURIComponent(project.ownerId)}`,
     };
     $: statusInfo = getProjectStatusInfo(project.status);
     $: stageInfo = getProjectStageInfo(project.projectStage ?? null);

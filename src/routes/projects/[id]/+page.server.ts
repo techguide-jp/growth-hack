@@ -4,6 +4,7 @@ import {
   getProjectById,
   getProjectViewById,
 } from "$lib/server/repositories/projects";
+import { listReactionSummaryForTarget } from "$lib/server/repositories/timeline";
 import {
   isProjectSuccessToast,
   type ProjectSuccessToast,
@@ -23,7 +24,10 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
     throw error(404, "プロジェクトが見つかりません。");
   }
 
-  const project = await getProjectViewById(params.id);
+  const [project, projectReactions] = await Promise.all([
+    getProjectViewById(params.id),
+    listReactionSummaryForTarget("project", params.id, locals.user?.id),
+  ]);
 
   if (!project) {
     throw error(404, "プロジェクトが見つかりません。");
@@ -39,6 +43,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
   return {
     canEdit: rawProject.ownerUserId === locals.user?.id,
     project,
+    projectReactions,
     successToast,
   };
 };

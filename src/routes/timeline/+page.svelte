@@ -1,59 +1,85 @@
 <script lang="ts">
-    import { timelinePosts } from "$lib/stores/mock";
     import TimelineComposer from "$lib/components/timeline/TimelineComposer.svelte";
     import TimelinePostCard from "$lib/components/timeline/TimelinePostCard.svelte";
+    import type { TimelinePostView, TimelineScope } from "$lib/shared/timeline";
 
-    // Sort by createdAt desc
-    $: posts = $timelinePosts.sort(
-        (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-
-    let activeTab = "all"; // all, following, project
+    export let data: {
+        scope: TimelineScope;
+        posts: TimelinePostView[];
+        myProjects: Array<{
+            id: string;
+            title: string;
+        }>;
+        canViewFollowing: boolean;
+        isLoggedIn: boolean;
+    };
 </script>
 
 <div class="flex gap-8">
-    <!-- Left Column: Main Feed -->
     <div class="flex-1 max-w-2xl">
         <div class="mb-6 flex items-center justify-between">
             <h1 class="text-2xl font-bold">タイムライン</h1>
 
-            <!-- Filter Tabs (Visual Only for MVP) -->
             <div class="flex bg-gray-100 p-1 rounded-lg">
-                <button
-                    class="px-3 py-1 text-sm font-medium rounded {activeTab ===
-                    'all'
-                        ? 'bg-white shadow'
-                        : 'text-gray-500'}"
-                    on:click={() => (activeTab = "all")}>全体</button
+                <a
+                    href="/timeline?scope=global"
+                    class={`px-3 py-1 text-sm font-medium rounded ${
+                        data.scope === "global"
+                            ? "bg-white shadow"
+                            : "text-gray-500"
+                    }`}
                 >
-                <button
-                    class="px-3 py-1 text-sm font-medium rounded {activeTab ===
-                    'following'
-                        ? 'bg-white shadow'
-                        : 'text-gray-500'}"
-                    on:click={() => (activeTab = "following")}
-                    >フォロー中</button
+                    全体
+                </a>
+                <a
+                    href="/timeline?scope=following"
+                    class={`px-3 py-1 text-sm font-medium rounded ${
+                        data.scope === "following"
+                            ? "bg-white shadow"
+                            : "text-gray-500"
+                    }`}
                 >
+                    フォロー中
+                </a>
             </div>
         </div>
 
-        <TimelineComposer />
+        <TimelineComposer projects={data.myProjects} />
 
-        {#each posts as post (post.id)}
-            <TimelinePostCard {post} />
-        {/each}
-
-        {#if posts.length === 0}
-            <div class="text-center py-12 text-gray-500">
+        {#if data.scope === "following" && !data.canViewFollowing}
+            <div
+                class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center"
+            >
+                <p class="text-sm text-gray-600">
+                    フォロー中フィードを見るにはログインが必要です。
+                </p>
+                <a
+                    href="/login?next=%2Ftimeline%3Fscope%3Dfollowing"
+                    class="mt-4 inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                    ログインする
+                </a>
+            </div>
+        {:else if data.posts.length > 0}
+            {#each data.posts as post (post.id)}
+                <TimelinePostCard {post} />
+            {/each}
+        {:else if data.scope === "following"}
+            <div
+                class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center text-gray-500"
+            >
+                まだフォロー中の投稿がありません。
+            </div>
+        {:else}
+            <div
+                class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center text-gray-500"
+            >
                 投稿がありません。最初の投稿をしてみましょう！
             </div>
         {/if}
     </div>
 
-    <!-- Right Column: Sidebar (Mock) -->
     <div class="hidden lg:block w-80 space-y-6">
-        <!-- Active Events -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <h3 class="font-bold text-gray-900 mb-3">開催中のイベント</h3>
             <div class="text-sm text-gray-500">
@@ -61,10 +87,8 @@
             </div>
         </div>
 
-        <!-- Recommended Users -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <h3 class="font-bold text-gray-900 mb-3">おすすめユーザー</h3>
-            <!-- Mock list -->
             <div class="space-y-3">
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-full bg-indigo-100"></div>
