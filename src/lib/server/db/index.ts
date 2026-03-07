@@ -11,11 +11,37 @@ let dbInstance: ReturnType<typeof drizzle> | null = null;
 let activeDatabaseUrl: string | null = null;
 
 export function hasDatabaseUrl() {
-  return Boolean(env.DATABASE_URL);
+  return Boolean(getConfiguredDatabaseUrl());
+}
+
+function isProductionLike() {
+  return env.NODE_ENV === "production" || env.APP_ENV === "production";
+}
+
+function getConfiguredDatabaseUrl() {
+  if (env.DATABASE_URL) {
+    return env.DATABASE_URL;
+  }
+
+  return null;
+}
+
+function getDatabaseUrl() {
+  const databaseUrl = getConfiguredDatabaseUrl();
+
+  if (databaseUrl) {
+    return databaseUrl;
+  }
+
+  if (isProductionLike()) {
+    throw new Error("DATABASE_URL is required in production.");
+  }
+
+  return FALLBACK_DATABASE_URL;
 }
 
 export function getDb() {
-  const databaseUrl = env.DATABASE_URL || FALLBACK_DATABASE_URL;
+  const databaseUrl = getDatabaseUrl();
 
   if (!queryClient || activeDatabaseUrl !== databaseUrl) {
     queryClient = postgres(databaseUrl, { max: 1 });
