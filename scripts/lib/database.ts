@@ -9,7 +9,29 @@ loadAppEnvFile();
 
 export function getDatabaseUrl() {
 	if (process.env.DATABASE_URL) {
-		return process.env.DATABASE_URL;
+		const databaseUrl = process.env.DATABASE_URL.trim();
+
+		if (databaseUrl.length === 0) {
+			throw new Error("DATABASE_URL must not be empty.");
+		}
+
+		try {
+			const parsed = new URL(databaseUrl);
+			const hasHost = parsed.hostname.length > 0;
+			const hasSocketHost = parsed.searchParams.has("host");
+
+			if (!hasHost && !hasSocketHost) {
+				throw new Error(
+					"DATABASE_URL must include a hostname or host query parameter."
+				);
+			}
+
+			return databaseUrl;
+		} catch (error) {
+			throw new Error(
+				`Invalid DATABASE_URL: ${error instanceof Error ? error.message : "failed to parse database url."}`
+			);
+		}
 	}
 
 	if (isProductionLike()) {
