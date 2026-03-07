@@ -21,13 +21,17 @@ import {
   HELP_WANTED_STATUS_VALUES,
   JOIN_REQUEST_STATUS_VALUES,
   PROJECT_MEMBER_ROLE_VALUES,
+  PROJECT_STAGE_VALUES,
   PROJECT_STATUS_VALUES,
+  PROJECT_HELP_TYPE_VALUES,
   REACTION_KIND_VALUES,
   REACTION_TARGET_TYPE_VALUES,
   SUPPORT_RECORD_STATUS_VALUES,
   TIMELINE_POST_STATUS_VALUES,
   TIMELINE_POST_TYPE_VALUES,
   TIMELINE_VISIBILITY_VALUES,
+  type ProjectHelpType,
+  type ProjectStage,
   type TimelineQuestionMeta,
 } from "../../shared/domain.ts";
 import { USER_ROLE_VALUES } from "../../shared/session.ts";
@@ -45,6 +49,7 @@ export const announcementTargetType = pgEnum(
   ANNOUNCEMENT_TARGET_TYPE_VALUES,
 );
 export const projectStatus = pgEnum("project_status", PROJECT_STATUS_VALUES);
+export const projectStage = pgEnum("project_stage", PROJECT_STAGE_VALUES);
 export const projectMemberRole = pgEnum(
   "project_member_role",
   PROJECT_MEMBER_ROLE_VALUES,
@@ -242,6 +247,19 @@ export const projects = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     summary: text("summary").notNull(),
+    problemStatement: text("problem_statement").notNull().default(""),
+    projectStage: projectStage("project_stage").$type<ProjectStage | null>(),
+    helpTypes: jsonb("help_types")
+      .$type<ProjectHelpType[]>()
+      .notNull()
+      .default(sql.raw(`'[]'::jsonb`)),
+    helpRequest: text("help_request").notNull().default(""),
+    highlights: jsonb("highlights")
+      .$type<string[]>()
+      .notNull()
+      .default(sql.raw(`'[]'::jsonb`)),
+    nextMilestone: text("next_milestone").notNull().default(""),
+    feedbackRequest: text("feedback_request").notNull().default(""),
     description: text("description").notNull(),
     publicUrl: text("public_url"),
     repoUrl: text("repo_url"),

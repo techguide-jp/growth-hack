@@ -1,12 +1,28 @@
 <script lang="ts">
-    import type { Project } from "$lib/stores/mock/data";
     import { getUser } from "$lib/stores/mock";
-    import { getProjectStatusInfo } from "$lib/constants/project";
+    import {
+        getProjectHelpTypeInfo,
+        getProjectStageInfo,
+        getProjectStatusInfo,
+    } from "$lib/constants/project";
+    import type { ProjectHelpType, ProjectStage, ProjectStatus } from "$lib/shared/domain";
     import { Calendar, Tag } from "lucide-svelte";
     import { formatDistanceToNow } from "date-fns";
     import { ja } from "date-fns/locale";
 
-    type ProjectCardProject = Project & {
+    type ProjectCardProject = {
+        id: string;
+        ownerId: string;
+        title: string;
+        oneLiner?: string;
+        summary?: string;
+        helpRequest?: string;
+        helpTypes?: ProjectHelpType[];
+        projectStage?: ProjectStage | null;
+        tags: string[];
+        images: string[];
+        status: ProjectStatus;
+        updatedAt: string;
         ownerName?: string | null;
         ownerAvatarUrl?: string | null;
     };
@@ -19,6 +35,13 @@
         avatarUrl: project.ownerAvatarUrl ?? $ownerStore?.avatarUrl,
     };
     $: statusInfo = getProjectStatusInfo(project.status);
+    $: stageInfo = getProjectStageInfo(project.projectStage ?? null);
+    $: oneLiner = project.oneLiner ?? project.summary ?? "";
+    $: helpTypes = (project.helpTypes ?? []).map((item) => ({
+        value: item,
+        ...getProjectHelpTypeInfo(item),
+    }));
+    $: helpRequestPreview = project.helpRequest?.split("\n")[0] ?? "";
 </script>
 
 <a
@@ -71,10 +94,31 @@
         >
             {project.title}
         </h3>
-        <p class="text-sm text-gray-600 mb-3 line-clamp-2">{project.summary}</p>
+        <p class="text-sm text-gray-600 mb-3 line-clamp-2">{oneLiner}</p>
+
+        <div class="mb-3 flex flex-wrap gap-2">
+            <span
+                class="rounded-full border px-2 py-1 text-xs font-bold {stageInfo.badgeClass}"
+            >
+                {stageInfo.label}
+            </span>
+            {#each helpTypes.slice(0, 2) as helpType}
+                <span
+                    class="rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700"
+                >
+                    {helpType.label}
+                </span>
+            {/each}
+        </div>
+
+        {#if helpRequestPreview}
+            <p class="mb-3 line-clamp-2 text-sm text-gray-500">
+                募集中: {helpRequestPreview}
+            </p>
+        {/if}
 
         <div class="flex flex-wrap gap-1">
-            {#each project.tags as tag}
+            {#each project.tags.slice(0, 4) as tag}
                 <span
                     class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800"
                 >

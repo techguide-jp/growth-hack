@@ -11,6 +11,8 @@ import {
 } from "$lib/server/db/schema";
 import type {
   CreateProjectInput,
+  ProjectHelpType,
+  ProjectStage,
   ProjectStatus,
   UpdateProjectInput,
 } from "$lib/shared/domain";
@@ -28,8 +30,15 @@ export type ProjectView = {
   ownerName: string | null;
   ownerAvatarUrl: string | null;
   title: string;
-  summary: string;
-  description: string;
+  oneLiner: string;
+  problemStatement: string;
+  projectStage: ProjectStage | null;
+  helpTypes: ProjectHelpType[];
+  helpRequest: string;
+  highlights: string[];
+  nextMilestone: string;
+  feedbackRequest: string;
+  backgroundNote: string;
   publicUrl?: string;
   repoUrl?: string;
   demoUrl?: string;
@@ -52,8 +61,15 @@ function toProjectView(
     ownerName: owner?.displayName ?? null,
     ownerAvatarUrl: owner?.avatarUrl ?? null,
     title: project.title,
-    summary: project.summary,
-    description: project.description,
+    oneLiner: project.summary,
+    problemStatement: project.problemStatement,
+    projectStage: project.projectStage,
+    helpTypes: project.helpTypes,
+    helpRequest: project.helpRequest,
+    highlights: project.highlights,
+    nextMilestone: project.nextMilestone,
+    feedbackRequest: project.feedbackRequest,
+    backgroundNote: project.description,
     publicUrl: project.publicUrl ?? undefined,
     repoUrl: project.repoUrl ?? undefined,
     demoUrl: project.demoUrl ?? undefined,
@@ -157,7 +173,12 @@ export async function listProjects(options: ListProjectsOptions = {}) {
   if (options.search) {
     const query = `%${options.search.trim()}%`;
     conditions.push(
-      or(ilike(projects.title, query), ilike(projects.summary, query)),
+      or(
+        ilike(projects.title, query),
+        ilike(projects.summary, query),
+        ilike(projects.problemStatement, query),
+        ilike(projects.helpRequest, query),
+      ),
     );
   }
 
@@ -196,8 +217,15 @@ export async function createProject(
       id: projectId,
       ownerUserId,
       title: input.title,
-      summary: input.summary,
-      description: input.description,
+      summary: input.oneLiner,
+      problemStatement: input.problemStatement ?? "",
+      projectStage: input.projectStage ?? null,
+      helpTypes: input.helpTypes,
+      helpRequest: input.helpRequest ?? "",
+      highlights: input.highlights,
+      nextMilestone: input.nextMilestone ?? "",
+      feedbackRequest: input.feedbackRequest ?? "",
+      description: input.backgroundNote ?? "",
       publicUrl: input.publicUrl ?? null,
       repoUrl: input.repoUrl ?? null,
       demoUrl: input.demoUrl ?? null,
@@ -225,35 +253,7 @@ export async function createProject(
         .onConflictDoNothing();
     }
 
-    if (input.tags.length > 0) {
-      await tx
-        .insert(tags)
-        .values(
-          input.tags.map((name) => ({
-            id: crypto.randomUUID(),
-            name,
-            createdAt: now,
-          })),
-        )
-        .onConflictDoNothing();
-
-      const persistedTags = await tx
-        .select()
-        .from(tags)
-        .where(inArray(tags.name, input.tags));
-
-      if (persistedTags.length > 0) {
-        await tx
-          .insert(projectTags)
-          .values(
-            persistedTags.map((tag) => ({
-              projectId,
-              tagId: tag.id,
-            })),
-          )
-          .onConflictDoNothing();
-      }
-    }
+    await syncProjectTags(tx, projectId, input.tags, now);
   });
 
   return getProjectViewById(projectId);
@@ -273,12 +273,40 @@ export async function updateProject(
     updateValues.title = input.title;
   }
 
-  if (input.summary !== undefined) {
-    updateValues.summary = input.summary;
+  if (input.oneLiner !== undefined) {
+    updateValues.summary = input.oneLiner;
   }
 
-  if (input.description !== undefined) {
-    updateValues.description = input.description;
+  if (input.problemStatement !== undefined) {
+    updateValues.problemStatement = input.problemStatement ?? "";
+  }
+
+  if ("projectStage" in input) {
+    updateValues.projectStage = input.projectStage ?? null;
+  }
+
+  if (input.helpTypes !== undefined) {
+    updateValues.helpTypes = input.helpTypes;
+  }
+
+  if (input.helpRequest !== undefined) {
+    updateValues.helpRequest = input.helpRequest ?? "";
+  }
+
+  if (input.highlights !== undefined) {
+    updateValues.highlights = input.highlights;
+  }
+
+  if (input.nextMilestone !== undefined) {
+    updateValues.nextMilestone = input.nextMilestone ?? "";
+  }
+
+  if (input.feedbackRequest !== undefined) {
+    updateValues.feedbackRequest = input.feedbackRequest ?? "";
+  }
+
+  if (input.backgroundNote !== undefined) {
+    updateValues.description = input.backgroundNote ?? "";
   }
 
   if ("publicUrl" in input) {
@@ -318,40 +346,49 @@ export async function updateProject(
 
     if (input.tags !== undefined) {
       await tx.delete(projectTags).where(eq(projectTags.projectId, projectId));
-
-      if (input.tags.length > 0) {
-        await tx
-          .insert(tags)
-          .values(
-            input.tags.map((name) => ({
-              id: crypto.randomUUID(),
-              name,
-              createdAt: now,
-            })),
-          )
-          .onConflictDoNothing();
-
-        const persistedTags = await tx
-          .select()
-          .from(tags)
-          .where(inArray(tags.name, input.tags));
-
-        if (persistedTags.length > 0) {
-          await tx
-            .insert(projectTags)
-            .values(
-              persistedTags.map((tag) => ({
-                projectId,
-                tagId: tag.id,
-              })),
-            )
-            .onConflictDoNothing();
-        }
-      }
+      await syncProjectTags(tx, projectId, input.tags, now);
     }
   });
 
   return getProjectViewById(projectId);
+}
+
+async function syncProjectTags(
+  tx: any,
+  projectId: string,
+  names: string[],
+  now: Date,
+) {
+  if (names.length === 0) {
+    return;
+  }
+
+  await tx
+    .insert(tags)
+    .values(
+      names.map((name) => ({
+        id: crypto.randomUUID(),
+        name,
+        createdAt: now,
+      })),
+    )
+    .onConflictDoNothing();
+
+  const persistedTags = await tx.select().from(tags).where(inArray(tags.name, names));
+
+  if (persistedTags.length === 0) {
+    return;
+  }
+
+  await tx
+    .insert(projectTags)
+    .values(
+      persistedTags.map((tag: { id: string }) => ({
+        projectId,
+        tagId: tag.id,
+      })),
+    )
+    .onConflictDoNothing();
 }
 
 export async function listProjectMembers(projectId: string) {

@@ -1,11 +1,13 @@
 <script lang="ts">
     import { api, supportRecords, currentUser, users } from "$lib/stores/mock";
-    import type { Project } from "$lib/stores/mock/data";
     import { ExternalLink, Gift, CheckCircle, Clock } from "lucide-svelte";
     import clsx from "clsx";
     import { format } from "date-fns";
 
-    type ProjectSupportPanelProject = Project & {
+    type ProjectSupportPanelProject = {
+        id: string;
+        ownerId: string;
+        title: string;
         ownerName?: string | null;
         ownerAvatarUrl?: string | null;
     };

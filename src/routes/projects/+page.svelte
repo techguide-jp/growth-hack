@@ -1,5 +1,10 @@
 <script lang="ts">
     import ProjectCard from "$lib/components/projects/ProjectCard.svelte";
+    import type {
+        ProjectHelpType,
+        ProjectStage,
+        ProjectStatus,
+    } from "$lib/shared/domain";
     import { Search, Filter, Plus } from "lucide-svelte";
 
     export let data: {
@@ -10,14 +15,21 @@
             ownerName: string | null;
             ownerAvatarUrl: string | null;
             title: string;
-            summary: string;
-            description: string;
+            oneLiner: string;
+            problemStatement: string;
+            projectStage: ProjectStage | null;
+            helpTypes: ProjectHelpType[];
+            helpRequest: string;
+            highlights: string[];
+            nextMilestone: string;
+            feedbackRequest: string;
+            backgroundNote: string;
             publicUrl?: string;
             repoUrl?: string;
             demoUrl?: string;
             tags: string[];
             images: string[];
-            status: "draft" | "published" | "archived";
+            status: ProjectStatus;
             createdAt: string;
             updatedAt: string;
         }>;

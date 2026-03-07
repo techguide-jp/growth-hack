@@ -14,6 +14,14 @@ function textFieldSchema(label: string, maxLength: number) {
     .max(maxLength, `${label}は${maxLength}文字以内で入力してください。`);
 }
 
+function boundedTextFieldSchema(label: string, minLength: number, maxLength: number) {
+  return z
+    .string()
+    .trim()
+    .min(minLength, `${label}は${minLength}文字以上で入力してください。`)
+    .max(maxLength, `${label}は${maxLength}文字以内で入力してください。`);
+}
+
 function optionalTextFieldSchema(label: string, maxLength: number) {
   return z.preprocess(
     emptyStringToUndefined,
@@ -49,6 +57,12 @@ export const PROJECT_STATUS_VALUES = [
   "draft",
   "published",
   "archived",
+] as const;
+export const PROJECT_STAGE_VALUES = [
+  "concept",
+  "prototype",
+  "beta",
+  "live",
 ] as const;
 export const PROJECT_MEMBER_ROLE_VALUES = ["owner", "contributor"] as const;
 export const EVENT_STATUS_VALUES = ["draft", "published"] as const;
@@ -93,8 +107,19 @@ export const TIMELINE_POST_TYPE_VALUES = [
 export const TIMELINE_POST_STATUS_VALUES = ["open", "solved"] as const;
 export const TIMELINE_VISIBILITY_VALUES = ["public"] as const;
 export const EMAIL_OUTBOX_STATUS_VALUES = ["queued", "sent", "failed"] as const;
+export const PROJECT_HELP_TYPE_VALUES = [
+  "feedback",
+  "testing",
+  "design",
+  "frontend",
+  "backend",
+  "ai-data",
+  "growth",
+  "teammate",
+] as const;
 
 export type ProjectStatus = (typeof PROJECT_STATUS_VALUES)[number];
+export type ProjectStage = (typeof PROJECT_STAGE_VALUES)[number];
 export type ProjectMemberRole = (typeof PROJECT_MEMBER_ROLE_VALUES)[number];
 export type EventStatus = (typeof EVENT_STATUS_VALUES)[number];
 export type AnnouncementTargetType =
@@ -112,8 +137,10 @@ export type TimelinePostType = (typeof TIMELINE_POST_TYPE_VALUES)[number];
 export type TimelinePostStatus = (typeof TIMELINE_POST_STATUS_VALUES)[number];
 export type TimelineVisibility = (typeof TIMELINE_VISIBILITY_VALUES)[number];
 export type EmailOutboxStatus = (typeof EMAIL_OUTBOX_STATUS_VALUES)[number];
+export type ProjectHelpType = (typeof PROJECT_HELP_TYPE_VALUES)[number];
 
 export const projectStatusSchema = z.enum(PROJECT_STATUS_VALUES);
+export const projectStageSchema = z.enum(PROJECT_STAGE_VALUES);
 export const projectMemberRoleSchema = z.enum(PROJECT_MEMBER_ROLE_VALUES);
 export const eventStatusSchema = z.enum(EVENT_STATUS_VALUES);
 export const announcementTargetTypeSchema = z.enum(
@@ -131,6 +158,7 @@ export const timelinePostTypeSchema = z.enum(TIMELINE_POST_TYPE_VALUES);
 export const timelinePostStatusSchema = z.enum(TIMELINE_POST_STATUS_VALUES);
 export const timelineVisibilitySchema = z.enum(TIMELINE_VISIBILITY_VALUES);
 export const emailOutboxStatusSchema = z.enum(EMAIL_OUTBOX_STATUS_VALUES);
+export const projectHelpTypeSchema = z.enum(PROJECT_HELP_TYPE_VALUES);
 
 export const projectTagSchema = textFieldSchema("タグ", 40).regex(
   /^[^\s#][^#]*$/,
@@ -139,14 +167,50 @@ export const projectTagSchema = textFieldSchema("タグ", 40).regex(
 export const projectTagsSchema = z
   .array(projectTagSchema)
   .max(20, "タグは20件以内で入力してください。")
+  .refine(
+    (values) => new Set(values.map((value) => value.toLowerCase())).size === values.length,
+    {
+      message: "タグは重複して登録できません。",
+    },
+  );
+
+export const projectHelpTypesSchema = z
+  .array(projectHelpTypeSchema)
+  .max(3, "欲しい協力は3件以内で選択してください。")
+  .refine((values) => new Set(values).size === values.length, {
+    message: "欲しい協力は重複して選択できません。",
+  });
+
+export const projectHighlightsSchema = z
+  .array(boundedTextFieldSchema("できること・見どころ", 15, 60))
+  .max(3, "できること・見どころは3件以内で入力してください。")
   .refine((values) => new Set(values.map((value) => value.toLowerCase())).size === values.length, {
-    message: "タグは重複して登録できません。",
+    message: "できること・見どころは重複して登録できません。",
   });
 
 export const createProjectInputSchema = z.object({
-  title: textFieldSchema("タイトル", 120),
-  summary: textFieldSchema("要約", 280),
-  description: textFieldSchema("詳細説明", 10000),
+  title: textFieldSchema("プロジェクト名", 120),
+  oneLiner: textFieldSchema("ひとことで何を作っているか", 80),
+  problemStatement: z.preprocess(
+    emptyStringToUndefined,
+    boundedTextFieldSchema("誰のどんな課題を解決するか", 60, 200).optional(),
+  ),
+  projectStage: z.preprocess(emptyStringToUndefined, projectStageSchema.optional()),
+  helpTypes: projectHelpTypesSchema.default([]),
+  helpRequest: z.preprocess(
+    emptyStringToUndefined,
+    boundedTextFieldSchema("協力してほしい具体的な内容", 60, 280).optional(),
+  ),
+  highlights: projectHighlightsSchema.default([]),
+  nextMilestone: z.preprocess(
+    emptyStringToUndefined,
+    boundedTextFieldSchema("次のマイルストーン", 30, 160).optional(),
+  ),
+  feedbackRequest: z.preprocess(
+    emptyStringToUndefined,
+    boundedTextFieldSchema("見てほしい点 / フィードバックが欲しい点", 20, 160).optional(),
+  ),
+  backgroundNote: optionalTextFieldSchema("補足・背景", 10000),
   publicUrl: optionalUrlFieldSchema,
   repoUrl: optionalUrlFieldSchema,
   demoUrl: optionalUrlFieldSchema,
@@ -155,7 +219,7 @@ export const createProjectInputSchema = z.object({
   eventIds: z.array(entityIdSchema).max(10).default([]),
 });
 
-export const updateProjectInputSchema = createProjectInputSchema.partial();
+export const updateProjectInputSchema = createProjectInputSchema;
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>;
 

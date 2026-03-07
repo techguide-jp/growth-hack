@@ -3,13 +3,17 @@
 
     export let id = "tags";
     export let name = "tags";
-    export let initialValue = "";
+    export let value = "";
     export let placeholder = "タグを入力して Enter で追加";
+    export let helperText =
+        "入力して Enter で追加。不要な項目はチップ右の × で削除できます。";
+    export let emptyStateLabel = "項目を追加";
+    export let maxItems = 20;
 
     let tagInput = "";
     let isComposing = false;
-    let lastInitialValue = initialValue;
-    let tags = parseTags(initialValue);
+    let lastValue = value;
+    let tags = parseTags(value);
 
     function parseTags(raw: string) {
         const seen = new Set<string>();
@@ -33,14 +37,19 @@
             });
     }
 
-    function syncFromProps(value: string) {
-        tags = parseTags(value);
+    function syncFromProps(nextValue: string) {
+        tags = parseTags(nextValue).slice(0, maxItems);
         tagInput = "";
-        lastInitialValue = value;
+        lastValue = nextValue;
     }
 
     function addTags(raw: string) {
-        const nextTags = parseTags(`${tags.join(",")},${raw}`);
+        if (tags.length >= maxItems) {
+            tagInput = "";
+            return;
+        }
+
+        const nextTags = parseTags(`${tags.join(",")},${raw}`).slice(0, maxItems);
 
         if (nextTags.length === tags.length) {
             tagInput = "";
@@ -76,9 +85,11 @@
         addTags(tagInput);
     }
 
-    $: if (initialValue !== lastInitialValue) {
-        syncFromProps(initialValue);
+    $: if (value !== lastValue) {
+        syncFromProps(value);
     }
+
+    $: value = tags.join(",");
 </script>
 
 <div class="space-y-2">
@@ -106,7 +117,8 @@
             type="text"
             bind:value={tagInput}
             class="min-w-[10rem] flex-1 border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
-            placeholder={tags.length === 0 ? placeholder : "タグを追加"}
+            placeholder={tags.length === 0 ? placeholder : emptyStateLabel}
+            disabled={tags.length >= maxItems}
             on:keydown={handleKeydown}
             on:blur={handleBlur}
             on:compositionstart={() => (isComposing = true)}
@@ -116,7 +128,5 @@
 
     <input type="hidden" {name} value={tags.join(",")} />
 
-    <p class="text-xs text-gray-500">
-        入力して Enter で追加。不要なタグはチップ右の × で削除できます。
-    </p>
+    <p class="text-xs text-gray-500">{helperText}</p>
 </div>

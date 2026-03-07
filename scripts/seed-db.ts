@@ -129,6 +129,21 @@ async function seedDb() {
             ownerUserId: "u1",
             title: "Growth Hach Platform",
             summary: "ハッカソン作品の継続開発を支援するプラットフォーム",
+            problemStatement:
+              "ハッカソンで生まれた作品は、発表後に更新の場や助けを求める場がなく、継続開発が止まりがちです。作品の進捗・相談・応援を一か所に集め、続けやすくしたいです。",
+            projectStage: "beta",
+            helpTypes: ["feedback", "frontend", "growth"],
+            helpRequest:
+              "プロジェクト詳細まわりの情報設計と、一覧から協力につながる導線を見てほしいです。特に初見で内容が伝わるか、どこで離脱しそうかをフィードバックしてもらえると助かります。",
+            highlights: [
+              "相談投稿に固定テンプレを入れて、質問しやすくしている",
+              "プロジェクト単位で更新・支援・会話をまとめて見られる",
+              "公開前チェックで作品紹介の質を揃えられる",
+            ],
+            nextMilestone:
+              "タイムライン投稿とコメントを実データ化して、プロジェクトの活動が自動で見える状態にする",
+            feedbackRequest:
+              "一覧カードの情報量が多すぎないか、協力したくなる訴求順になっているかを見てほしいです。",
             description:
               "イベント起点で作品の継続開発を支えるコミュニティ基盤。投稿、相談、支援、会話を一か所に集約します。",
             publicUrl: "https://example.com/growth-hach",
@@ -143,6 +158,20 @@ async function seedDb() {
             ownerUserId: "u2",
             title: "AI Code Assistant",
             summary: "VSCode extension for AI coding",
+            problemStatement:
+              "個人開発では、コードレビューや次の一手をその場で相談できず、実装品質とスピードが落ちやすいです。エディタ内で改善観点を返し、迷いを減らしたいです。",
+            projectStage: "prototype",
+            helpTypes: ["testing", "design"],
+            helpRequest:
+              "VSCode 拡張の初期体験をテストして、どのタイミングで案内が多すぎるかを見てほしいです。UIの見せ方も相談したいです。",
+            highlights: [
+              "選択中コードに対してレビュー観点をその場で返せる",
+              "会話履歴を残しながら改善提案を比較できる",
+            ],
+            nextMilestone:
+              "会話導線を見直し、初回起動からレビュー実行までを3ステップ以内にする",
+            feedbackRequest:
+              "レビュー提案の粒度が適切か、初心者にも理解しやすいかを見てほしいです。",
             description:
               "コード補完とレビュー観点の提案を支援する VSCode 拡張。現在は会話導線を強化中です。",
             publicUrl: "https://example.com/ai-code-assistant",

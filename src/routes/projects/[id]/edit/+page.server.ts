@@ -6,47 +6,11 @@ import {
   getProjectViewById,
   updateProject,
 } from "$lib/server/repositories/projects";
-import { updateProjectInputSchema } from "$lib/shared/domain";
-
-function parseTags(value: FormDataEntryValue | null) {
-  if (typeof value !== "string") {
-    return [];
-  }
-
-  return value
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter((tag) => tag.length > 0);
-}
-
-type ProjectFormValues = {
-  title: string;
-  summary: string;
-  description: string;
-  publicUrl: string;
-  repoUrl: string;
-  demoUrl: string;
-  tags: string;
-  status: string;
-};
-
-function getStringEntry(formData: FormData, key: string) {
-  const value = formData.get(key);
-  return typeof value === "string" ? value : "";
-}
-
-function getProjectFormValues(formData: FormData): ProjectFormValues {
-  return {
-    title: getStringEntry(formData, "title"),
-    summary: getStringEntry(formData, "summary"),
-    description: getStringEntry(formData, "description"),
-    publicUrl: getStringEntry(formData, "publicUrl"),
-    repoUrl: getStringEntry(formData, "repoUrl"),
-    demoUrl: getStringEntry(formData, "demoUrl"),
-    tags: getStringEntry(formData, "tags"),
-    status: getStringEntry(formData, "status"),
-  };
-}
+import {
+  getProjectFormValues,
+  resolveTargetStatus,
+  validateProjectFormValues,
+} from "$lib/server/projects/form";
 
 export const load: PageServerLoad = async (event) => {
   const user = requireOnboarded(event);
@@ -66,30 +30,35 @@ export const actions: Actions = {
   default: async (event) => {
     const user = requireOnboarded(event);
     await requireProjectOwner(user.id, event.params.id);
+    const currentProject = await getProjectViewById(event.params.id);
+
+    if (!currentProject) {
+      throw error(404, "プロジェクトが見つかりません。");
+    }
+
     const formData = await event.request.formData();
     const values = getProjectFormValues(formData);
-
-    const parsed = updateProjectInputSchema.safeParse({
-      title: values.title,
-      summary: values.summary,
-      description: values.description,
-      publicUrl: values.publicUrl,
-      repoUrl: values.repoUrl,
-      demoUrl: values.demoUrl,
-      tags: parseTags(formData.get("tags")),
-      status: values.status,
+    const targetStatus = resolveTargetStatus(
+      values.statusIntent,
+      currentProject.status,
+    );
+    const result = validateProjectFormValues(values, {
+      targetStatus,
+      currentStatus: currentProject.status,
+      existingImageCount: currentProject.images.length,
+      requireDraftRequirements:
+        currentProject.status === "draft" ||
+        (targetStatus === "published" && currentProject.status !== "published"),
     });
 
-    if (!parsed.success) {
+    if (!result.success) {
       return fail(400, {
-        message:
-          parsed.error.issues[0]?.message ??
-          "入力内容を確認してください。",
+        message: result.message,
         values,
       });
     }
 
-    const project = await updateProject(event.params.id, parsed.data);
+    const project = await updateProject(event.params.id, result.data);
 
     if (!project) {
       return fail(500, {
