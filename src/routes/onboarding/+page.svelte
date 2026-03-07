@@ -1,16 +1,25 @@
 <script lang="ts">
-    import { api, currentUser, userPreferences } from "$lib/stores/mock";
-    import { goto } from "$app/navigation";
+    import type { UserPreferencesState } from "$lib/shared/settings";
     import { Rocket, Heart, Users, Calendar } from "lucide-svelte";
 
-    let selectedErrors = false;
-    let selectedModes: string[] = [];
+    export let data: {
+        next: string;
+        preferences: UserPreferencesState;
+    };
 
-    $: prefs = $userPreferences.find((p) => p.userId === $currentUser?.id);
-    $: if (prefs && selectedModes.length === 0) {
-        // Pre-fill if exists
-        selectedModes = [...prefs.focusModes];
-    }
+    export let form:
+        | {
+              message?: string;
+              values?: {
+                  focusModes?: string[];
+              };
+          }
+        | undefined;
+
+    let selectedModes = [
+        ...(form?.values?.focusModes ?? data.preferences.focusModes),
+    ];
+    $: serializedModes = JSON.stringify(selectedModes);
 
     const MODES = [
         {
@@ -44,17 +53,6 @@
             selectedModes = selectedModes.filter((m) => m !== id);
         } else {
             selectedModes = [...selectedModes, id];
-        }
-    }
-
-    function handleSave() {
-        if (selectedModes.length === 0) {
-            selectedErrors = true;
-            return;
-        }
-        if ($currentUser) {
-            api.updateFocusModes($currentUser.id, selectedModes);
-            goto("/");
         }
     }
 </script>
@@ -117,14 +115,18 @@
         {/each}
     </div>
 
-    {#if selectedErrors}
-        <p class="text-red-500 font-bold mb-4">少なくとも1つ選択してください</p>
+    {#if form?.message}
+        <p class="text-red-500 font-bold mb-4">{form.message}</p>
     {/if}
 
-    <button
-        class="w-full max-w-xs py-4 px-8 bg-indigo-600 text-white rounded-full text-xl font-bold shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all"
-        on:click={handleSave}
-    >
-        はじめる
-    </button>
+    <form method="POST" class="w-full max-w-xs">
+        <input type="hidden" name="focusModes" value={serializedModes} />
+        <input type="hidden" name="next" value={data.next} />
+        <button
+            type="submit"
+            class="w-full py-4 px-8 bg-indigo-600 text-white rounded-full text-xl font-bold shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all"
+        >
+            はじめる
+        </button>
+    </form>
 </div>

@@ -79,7 +79,7 @@
                 あなたの現在のモード
             </h2>
             <a
-                href="/onboarding"
+                href="/settings"
                 class="text-sm text-indigo-600 hover:underline">変更する</a
             >
         </div>

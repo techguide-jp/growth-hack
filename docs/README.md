@@ -10,8 +10,10 @@
 - `06_estimate.tsv` : 見積りシート（TSV）
 - `07_questions.tsv` : 質問表（TSV）
 - `08_prompt_sveltekit_mock.txt` : モック生成プロンプト（SvelteKit想定、日本語）
+- `09_oauth_setup.md` : Google / GitHub OAuth の設定手順（Better Auth 実装対応）
 
 ## 前提（確定事項）
+
 - フレームワーク: **SvelteKit**
 - ユーザロール: **user**（全員同一）と **admin**（運営のみ）
 - 投げ銭: **外部決済**。ただし金額はシステム内で「支援記録」として把握

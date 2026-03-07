@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { api, comments, users } from "$lib/stores/mock";
-    import { createEventDispatcher } from "svelte";
+    import { page } from "$app/stores";
+    import { api, comments, currentUser, users } from "$lib/stores/mock";
     import { Send, Star, Check } from "lucide-svelte";
     import clsx from "clsx";
     import { formatDistanceToNow } from "date-fns";
@@ -20,13 +20,18 @@
     );
     $: visibleComments = showAll ? allComments : allComments.slice(-3); // Show last 3 by default
     $: hasMore = allComments.length > visibleComments.length;
+    $: loginHref = `/login?next=${encodeURIComponent(
+        `${$page.url.pathname}${$page.url.search}`,
+    )}`;
 
     function handleAdd() {
+        if (!$currentUser) return;
         if (!newCommentBody.trim()) return;
+
         api.addComment({
             targetId,
             targetType,
-            authorId: "u1", // Mock current user
+            authorId: $currentUser.id,
             body: newCommentBody,
         });
         newCommentBody = "";
@@ -98,20 +103,30 @@
         {/each}
     </div>
 
-    <div class="relative">
-        <input
-            type="text"
-            bind:value={newCommentBody}
-            placeholder="コメントを書く..."
-            class="w-full text-sm rounded-full border-gray-300 pl-4 pr-10 py-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 hover:bg-white transition-colors"
-            on:keydown={(e) => e.key === "Enter" && handleAdd()}
-        />
-        <button
-            class="absolute right-2 top-1.5 text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
-            disabled={!newCommentBody}
-            on:click={handleAdd}
-        >
-            <Send class="w-4 h-4" />
-        </button>
-    </div>
+    {#if $currentUser}
+        <div class="relative">
+            <input
+                type="text"
+                bind:value={newCommentBody}
+                placeholder="コメントを書く..."
+                class="w-full text-sm rounded-full border-gray-300 pl-4 pr-10 py-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 hover:bg-white transition-colors"
+                on:keydown={(e) => e.key === "Enter" && handleAdd()}
+            />
+            <button
+                class="absolute right-2 top-1.5 text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                disabled={!newCommentBody}
+                on:click={handleAdd}
+            >
+                <Send class="w-4 h-4" />
+            </button>
+        </div>
+    {:else}
+        <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            コメントするには
+            <a href={loginHref} class="font-medium text-indigo-600 hover:underline">
+                ログイン
+            </a>
+            してください。
+        </div>
+    {/if}
 </div>
