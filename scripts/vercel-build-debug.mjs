@@ -64,17 +64,17 @@ function resolveNftPath() {
 function patchNftLogging() {
   const nftPath = resolveNftPath();
   const source = fs.readFileSync(nftPath, "utf8");
-  const emitDependencyPrologue = `async emitDependency(path, parent, depth = this.depth) {\n        const ignoreSandboxDependency = parent === '/var/task/sandbox.js' && (path.includes('/vercel/.local/share/pnpm/') || path.includes('/.local/share/pnpm/') || path.includes('/proc/') || path.includes('/usr/bin'));\n        if (ignoreSandboxDependency)\n            return;\n        if (depth < 0)\n            throw new Error('invariant - depth option cannot be negative');`;
-  const originalEmitDependencyPrologue = `async emitDependency(path, parent, depth = this.depth) {\n        if (depth < 0)\n            throw new Error('invariant - depth option cannot be negative');`;
+  const emitDependencyPrologue = `async emitDependency(path, parent, depth = this.depth) {\n        const ignoreSandboxDependency = parent === '/var/task/sandbox.js';\n        if (ignoreSandboxDependency)\n            return;\n        if (depth < 0)\n            throw new Error('invariant - depth option cannot be negative');`;
+  const emitDependencyProloguePattern = /async emitDependency\(path, parent, depth = this\.depth\) \{\n(?:        const ignoreSandboxDependency = [^\n]+\n        if \(ignoreSandboxDependency\)\n            return;\n)?        if \(depth < 0\)\n            throw new Error\('invariant - depth option cannot be negative'\);/;
 
-  const replacement = `if (source === null) {\n                const missingFileContext = {\n                    requestedPath: path,\n                    realPath,\n                    parent,\n                    depth,\n                    base: this.base,\n                    cwd: this.cwd,\n                    execPath: process.execPath,\n                    npmExecPath: process.env.npm_execpath,\n                    nodePath: process.env.NODE_PATH,\n                    userAgent: process.env.npm_config_user_agent,\n                };\n                const ignoreMissingFile = realPath.includes('/.local/share/pnpm/.tools/pnpm/') || realPath.includes('/usr/bin') || realPath.includes('/proc/') || path.includes('/.local/share/pnpm/.tools/pnpm/') || path.includes('/vercel/.local/share/pnpm/') || path.includes('/usr/bin') || path.includes('/proc/') || parent === '/var/task/sandbox.js';\n                if (ignoreMissingFile) {\n                    return;\n                }\n                console.error('[codex:nft-missing-file]', JSON.stringify(missingFileContext, null, 2));\n                throw new Error('File ' + realPath + ' does not exist.');\n            }`;
+  const replacement = `if (source === null) {\n                const missingFileContext = {\n                    requestedPath: path,\n                    realPath,\n                    parent,\n                    depth,\n                    base: this.base,\n                    cwd: this.cwd,\n                    execPath: process.execPath,\n                    npmExecPath: process.env.npm_execpath,\n                    nodePath: process.env.NODE_PATH,\n                    userAgent: process.env.npm_config_user_agent,\n                };\n                const ignoreMissingFile = realPath.includes('/.local/share/pnpm/.tools/pnpm/') || realPath.includes('/.pnpm-store/') || realPath.includes('/usr/bin') || realPath.includes('/proc/') || path.includes('/.local/share/pnpm/.tools/pnpm/') || path.includes('/vercel/.local/share/pnpm/') || path.includes('/.pnpm-store/') || path.includes('/usr/bin') || path.includes('/proc/') || parent === '/var/task/sandbox.js';\n                if (ignoreMissingFile) {\n                    return;\n                }\n                console.error('[codex:nft-missing-file]', JSON.stringify(missingFileContext, null, 2));\n                throw new Error('File ' + realPath + ' does not exist.');\n            }`;
   const patchedBlock = /if \(source === null\) \{[\s\S]*?throw new Error\('File ' \+ realPath \+ ' does not exist\.'\);\n\s*\}/;
   const originalBlock = "if (source === null)\n                throw new Error('File ' + realPath + ' does not exist.');";
 
   let nextSource = source;
 
-  if (nextSource.includes(originalEmitDependencyPrologue)) {
-    nextSource = nextSource.replace(originalEmitDependencyPrologue, emitDependencyPrologue);
+  if (emitDependencyProloguePattern.test(nextSource)) {
+    nextSource = nextSource.replace(emitDependencyProloguePattern, emitDependencyPrologue);
   } else if (!nextSource.includes(emitDependencyPrologue)) {
     throw new Error(`@vercel/nft の emitDependency パッチ対象が見つかりません: ${nftPath}`);
   }
@@ -96,18 +96,31 @@ function patchNftLogging() {
 
 function patchAdapterWarningNoise() {
   const source = fs.readFileSync(adapterIndexPath, "utf8");
+  const originalTraceLine = `\tconst traced = await nodeFileTrace([entry], { base });`;
+  const patchedTraceLine = `\tconst traced = await nodeFileTrace([entry], {\n\t\tbase,\n\t\tignore: (value) =>\n\t\t\tvalue.includes('.pnpm-store/') ||\n\t\t\tvalue.includes('.local/share/pnpm/') ||\n\t\t\tvalue.includes('/proc/') ||\n\t\t\tvalue.includes('/usr/bin') ||\n\t\t\tvalue.includes('var/task/sandbox.js')\n\t});`;
   const originalWarningBlock = `\tif (resolution_failures.size > 0) {\n\t\tconst cwd = process.cwd();\n\t\tbuilder.log.warn(\n\t\t\t'Warning: The following modules failed to locate dependencies that may (or may not) be required for your app to work:'\n\t\t);\n\n\t\tfor (const [importer, modules] of resolution_failures) {\n\t\t\tconsole.error(\`  \${path.relative(cwd, importer)}\`);\n\t\t\tfor (const module of modules) {\n\t\t\t\tconsole.error(\`    - \\u001B[1m\\u001B[36m\${module}\\u001B[39m\\u001B[22m\`);\n\t\t\t}\n\t\t}\n\t}`;
   const patchedWarningBlock = `\tconst noisy_warning_patterns = [\n\t\t'/var/task/sandbox.js',\n\t\t'/.pnpm-store/',\n\t\t'/vercel/.local/share/pnpm/',\n\t\t'/.local/share/pnpm/',\n\t\t'/.vercel/output/functions/',\n\t\t'/usr/bin',\n\t\t'/proc/'\n\t];\n\tconst is_noisy_warning = (value) => noisy_warning_patterns.some((pattern) => value.includes(pattern));\n\tconst filtered_resolution_failures = new Map();\n\n\t\tfor (const [importer, modules] of resolution_failures) {\n\t\t\tif (is_noisy_warning(importer)) continue;\n\t\t\tconst filtered_modules = modules.filter((module) => !is_noisy_warning(module)).slice(0, 20);\n\t\t\tif (filtered_modules.length === 0) continue;\n\t\t\tfiltered_resolution_failures.set(importer, filtered_modules);\n\t\t}\n\n\tif (filtered_resolution_failures.size > 0) {\n\t\tconst cwd = process.cwd();\n\t\tbuilder.log.warn(\n\t\t\t'Warning: The following modules failed to locate dependencies that may (or may not) be required for your app to work:'\n\t\t);\n\n\t\tfor (const [importer, modules] of filtered_resolution_failures) {\n\t\t\tconsole.error(\`  \${path.relative(cwd, importer)}\`);\n\t\t\tfor (const module of modules) {\n\t\t\t\tconsole.error(\`    - \\u001B[1m\\u001B[36m\${module}\\u001B[39m\\u001B[22m\`);\n\t\t\t}\n\t\t}\n\t}`;
 
-  if (source.includes(patchedWarningBlock)) {
+  if (source.includes(patchedTraceLine) && source.includes(patchedWarningBlock)) {
     return adapterIndexPath;
   }
 
-  if (!source.includes(originalWarningBlock)) {
+  if (!source.includes(originalTraceLine) && !source.includes(patchedTraceLine)) {
+    throw new Error(`@sveltejs/adapter-vercel の trace パッチ対象が見つかりません: ${adapterIndexPath}`);
+  }
+
+  if (!source.includes(originalWarningBlock) && !source.includes(patchedWarningBlock)) {
     throw new Error(`@sveltejs/adapter-vercel の warning パッチ対象が見つかりません: ${adapterIndexPath}`);
   }
 
-  fs.writeFileSync(adapterIndexPath, source.replace(originalWarningBlock, patchedWarningBlock));
+  const withPatchedTrace = source.includes(originalTraceLine)
+    ? source.replace(originalTraceLine, patchedTraceLine)
+    : source;
+  const withPatchedWarnings = withPatchedTrace.includes(originalWarningBlock)
+    ? withPatchedTrace.replace(originalWarningBlock, patchedWarningBlock)
+    : withPatchedTrace;
+
+  fs.writeFileSync(adapterIndexPath, withPatchedWarnings);
   return adapterIndexPath;
 }
 
