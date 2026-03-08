@@ -75,7 +75,7 @@ function patchNft() {
   const emitDependencyReplacement = `async emitDependency(path, parent, depth = this.depth) {\n        const ignoreSandboxDependency = parent === '/var/task/sandbox.js';\n        if (ignoreSandboxDependency)\n            return;\n        if (depth < 0)\n            throw new Error('invariant - depth option cannot be negative');`;
 
   const missingFilePattern =
-    /if \(source === null\) \{[\s\S]*?throw new Error\('File ' \+ realPath \+ ' does not exist\.'\);\n\s*\}/;
+    /if \(source === null\)\s*(?:\{\s*)?throw new Error\('File ' \+ realPath \+ ' does not exist\.'\);\s*(?:\})?/;
   const missingFileReplacement = `if (source === null) {\n                const ignoreMissingFile = realPath.includes('/.local/share/pnpm/.tools/pnpm/') || realPath.includes('/.pnpm-store/') || realPath.includes('/usr/bin') || realPath.includes('/proc/') || path.includes('/.local/share/pnpm/.tools/pnpm/') || path.includes('/vercel/.local/share/pnpm/') || path.includes('/.pnpm-store/') || path.includes('/usr/bin') || path.includes('/proc/') || parent === '/var/task/sandbox.js';\n                if (ignoreMissingFile) {\n                    return;\n                }\n                throw new Error('File ' + realPath + ' does not exist.');\n            }`;
 
   let nextSource = regexReplace(
