@@ -63,17 +63,25 @@ function resolveNftPath() {
 function patchNftLogging() {
   const nftPath = resolveNftPath();
   const source = fs.readFileSync(nftPath, "utf8");
+  const emitDependencyPrologue = `async emitDependency(path, parent, depth = this.depth) {\n        const ignoreSandboxDependency = parent === '/var/task/sandbox.js' && (path.includes('/vercel/.local/share/pnpm/') || path.includes('/.local/share/pnpm/') || path.includes('/proc/') || path.includes('/usr/bin'));\n        if (ignoreSandboxDependency)\n            return;\n        if (depth < 0)\n            throw new Error('invariant - depth option cannot be negative');`;
+  const originalEmitDependencyPrologue = `async emitDependency(path, parent, depth = this.depth) {\n        if (depth < 0)\n            throw new Error('invariant - depth option cannot be negative');`;
 
-  const replacement = `if (source === null) {\n                const missingFileContext = {\n                    requestedPath: path,\n                    realPath,\n                    parent,\n                    depth,\n                    base: this.base,\n                    cwd: this.cwd,\n                    execPath: process.execPath,\n                    npmExecPath: process.env.npm_execpath,\n                    nodePath: process.env.NODE_PATH,\n                    userAgent: process.env.npm_config_user_agent,\n                };\n                console.error('[codex:nft-missing-file]', JSON.stringify(missingFileContext, null, 2));\n                const ignoreMissingFile = realPath.includes('/.local/share/pnpm/.tools/pnpm/') || realPath.includes('/usr/bin') || realPath.includes('/proc/') || path.includes('/.local/share/pnpm/.tools/pnpm/') || path.includes('/usr/bin') || path.includes('/proc/') || (parent === '/var/task/sandbox.js' && (path.includes('/proc/') || path.includes('/usr/bin')));\n                if (ignoreMissingFile) {\n                    console.error('[codex:nft-ignored-missing-file]', JSON.stringify(missingFileContext, null, 2));\n                    return;\n                }\n                throw new Error('File ' + realPath + ' does not exist.');\n            }`;
+  const replacement = `if (source === null) {\n                const missingFileContext = {\n                    requestedPath: path,\n                    realPath,\n                    parent,\n                    depth,\n                    base: this.base,\n                    cwd: this.cwd,\n                    execPath: process.execPath,\n                    npmExecPath: process.env.npm_execpath,\n                    nodePath: process.env.NODE_PATH,\n                    userAgent: process.env.npm_config_user_agent,\n                };\n                const ignoreMissingFile = realPath.includes('/.local/share/pnpm/.tools/pnpm/') || realPath.includes('/usr/bin') || realPath.includes('/proc/') || path.includes('/.local/share/pnpm/.tools/pnpm/') || path.includes('/vercel/.local/share/pnpm/') || path.includes('/usr/bin') || path.includes('/proc/') || parent === '/var/task/sandbox.js';\n                if (ignoreMissingFile) {\n                    return;\n                }\n                console.error('[codex:nft-missing-file]', JSON.stringify(missingFileContext, null, 2));\n                throw new Error('File ' + realPath + ' does not exist.');\n            }`;
   const patchedBlock = /if \(source === null\) \{[\s\S]*?throw new Error\('File ' \+ realPath \+ ' does not exist\.'\);\n\s*\}/;
   const originalBlock = "if (source === null)\n                throw new Error('File ' + realPath + ' does not exist.');";
 
   let nextSource = source;
 
+  if (nextSource.includes(originalEmitDependencyPrologue)) {
+    nextSource = nextSource.replace(originalEmitDependencyPrologue, emitDependencyPrologue);
+  } else if (!nextSource.includes(emitDependencyPrologue)) {
+    throw new Error(`@vercel/nft の emitDependency パッチ対象が見つかりません: ${nftPath}`);
+  }
+
   if (patchedBlock.test(source)) {
-    nextSource = source.replace(patchedBlock, replacement);
-  } else if (source.includes(originalBlock)) {
-    nextSource = source.replace(originalBlock, replacement);
+    nextSource = nextSource.replace(patchedBlock, replacement);
+  } else if (nextSource.includes(originalBlock)) {
+    nextSource = nextSource.replace(originalBlock, replacement);
   } else {
     throw new Error(`@vercel/nft のパッチ対象が見つかりません: ${nftPath}`);
   }
