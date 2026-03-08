@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  getMediaStorageDriver,
-  saveProjectScreenshotBuffer,
-} from "$lib/server/media/storage";
+import { saveProjectScreenshotBuffer } from "$lib/server/media/storage";
 
 const originalMediaStorageDriver = process.env.MEDIA_STORAGE_DRIVER;
 const originalBlobToken = process.env.BLOB_READ_WRITE_TOKEN;
@@ -23,21 +20,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("media storage driver", () => {
-  it("BLOB token がある場合は driver 未設定でも vercel-blob を使う", () => {
-    delete process.env.MEDIA_STORAGE_DRIVER;
-    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-
-    expect(getMediaStorageDriver()).toBe("vercel-blob");
-  });
-
-  it("driver が明示されている場合は token より設定を優先する", () => {
-    process.env.MEDIA_STORAGE_DRIVER = "local";
-    process.env.BLOB_READ_WRITE_TOKEN = "blob-token";
-
-    expect(getMediaStorageDriver()).toBe("local");
-  });
-
+describe("media storage", () => {
   it("serverless bundle 上で local 保存しようとすると設定エラーを返す", async () => {
     process.env.MEDIA_STORAGE_DRIVER = "local";
     delete process.env.BLOB_READ_WRITE_TOKEN;

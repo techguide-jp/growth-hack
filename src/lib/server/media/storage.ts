@@ -2,6 +2,10 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { del, put } from "@vercel/blob";
 import {
+  getMediaStorageDriver,
+  isServerlessBundleFilesystem,
+} from "$lib/server/media/runtime";
+import {
   createProjectScreenshotPathname,
   getImageUrlPathname,
   isLegacyProjectScreenshotUrl,
@@ -11,14 +15,12 @@ import {
   PROJECT_SCREENSHOT_MEDIA_PATH_PREFIX,
   PROJECT_SCREENSHOT_OUTPUT_MIME_TYPE,
   toImagePublicUrl,
-  type MediaStorageDriver,
 } from "$lib/shared/media/config";
 
 const STATIC_ROOT = join(process.cwd(), "static");
 const STATIC_MEDIA_ROOT = join(STATIC_ROOT, "media");
 const LEGACY_UPLOAD_ROOT = join(STATIC_ROOT, "uploads", "projects");
 const VERCEL_BLOB_HOST_SUFFIX = ".public.blob.vercel-storage.com";
-const VERCEL_SERVERLESS_ROOT = "/var/task";
 
 type ProjectScreenshotSaveResult = {
   pathname: string;
@@ -62,33 +64,6 @@ function getBlobToken() {
   return process.env.BLOB_READ_WRITE_TOKEN;
 }
 
-function isServerlessBundleFilesystem() {
-  return process.cwd().startsWith(VERCEL_SERVERLESS_ROOT);
-}
-
-function getConfiguredMediaStorageDriver() {
-  const configuredDriver = process.env.MEDIA_STORAGE_DRIVER?.trim();
-
-  if (
-    configuredDriver === "local" ||
-    configuredDriver === "vercel-blob"
-  ) {
-    return configuredDriver;
-  }
-
-  return null;
-}
-
-export function getMediaStorageDriver(): MediaStorageDriver {
-  const configuredDriver = getConfiguredMediaStorageDriver();
-
-  if (configuredDriver) {
-    return configuredDriver;
-  }
-
-  return getBlobToken() ? "vercel-blob" : "local";
-}
-
 function assertLocalMediaStorageAvailable() {
   if (!isServerlessBundleFilesystem()) {
     return;
@@ -97,15 +72,6 @@ function assertLocalMediaStorageAvailable() {
   throw new Error(
     "この実行環境では local 画像保存を利用できません。MEDIA_STORAGE_DRIVER=vercel-blob と BLOB_READ_WRITE_TOKEN を設定してください。",
   );
-}
-
-export function getMediaUploadConfig() {
-  const driver = getMediaStorageDriver();
-
-  return {
-    driver,
-    supportsDirectUpload: driver === "vercel-blob",
-  };
 }
 
 export async function saveProjectScreenshotBuffer(options: {

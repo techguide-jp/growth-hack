@@ -1,11 +1,11 @@
 import { fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import { requireOnboarded } from "$lib/server/auth/guards";
+import { createProject } from "$lib/server/repositories/project-mutations";
+import { getMediaUploadConfig } from "$lib/server/media/runtime";
 import {
-  createProject,
   getProjectById,
 } from "$lib/server/repositories/projects";
-import { getMediaUploadConfig } from "$lib/server/media/storage";
 import {
   getProjectFormValues,
   resolveTargetStatus,

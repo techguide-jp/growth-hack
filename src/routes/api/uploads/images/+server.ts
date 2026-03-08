@@ -2,7 +2,7 @@ import { json } from "@sveltejs/kit";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { z } from "zod";
 import { requireOnboarded } from "$lib/server/auth/guards";
-import { getMediaStorageDriver } from "$lib/server/media/storage";
+import { getMediaStorageDriver } from "$lib/server/media/runtime";
 import {
   parseProjectScreenshotPathname,
   PROJECT_SCREENSHOT_MAX_SOURCE_SIZE_BYTES,
