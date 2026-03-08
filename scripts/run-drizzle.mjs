@@ -29,9 +29,10 @@ if (isProductionLike() && !databaseUrl) {
   process.exit(1);
 }
 
+const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const child = spawn(
-  process.execPath,
-  ["node_modules/drizzle-kit/bin.cjs", ...args],
+  pnpmCommand,
+  ["dlx", "drizzle-kit@0.31.4", ...args],
   {
     stdio: "inherit",
     env: {
