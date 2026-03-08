@@ -3,9 +3,11 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 
-const require = createRequire(import.meta.url);
 const workspaceRoot = process.cwd();
 const dryRun = process.argv.includes("--dry-run");
+const workspaceRequire = createRequire(path.join(workspaceRoot, "package.json"));
+const adapterPackageJsonPath = workspaceRequire.resolve("@sveltejs/adapter-vercel/package.json");
+const adapterRequire = createRequire(adapterPackageJsonPath);
 const ignoredMissingPathPatterns = [
   "/.local/share/pnpm/.tools/pnpm/",
   "/usr/bin",
@@ -40,16 +42,26 @@ function log(label, value) {
   console.error(`[codex:vercel-debug] ${label}: ${value}`);
 }
 
-function safeResolve(specifier) {
+function safeResolve(specifier, resolver = workspaceRequire) {
   try {
-    return require.resolve(specifier);
+    return resolver.resolve(specifier);
   } catch {
     return "<unresolved>";
   }
 }
 
+function resolveNftPath() {
+  const directPath = safeResolve("@vercel/nft/out/node-file-trace.js");
+
+  if (directPath !== "<unresolved>") {
+    return directPath;
+  }
+
+  return adapterRequire.resolve("@vercel/nft/out/node-file-trace.js");
+}
+
 function patchNftLogging() {
-  const nftPath = require.resolve("@vercel/nft/out/node-file-trace.js");
+  const nftPath = resolveNftPath();
   const source = fs.readFileSync(nftPath, "utf8");
 
   const replacement = `if (source === null) {\n                const missingFileContext = {\n                    requestedPath: path,\n                    realPath,\n                    parent,\n                    depth,\n                    base: this.base,\n                    cwd: this.cwd,\n                    execPath: process.execPath,\n                    npmExecPath: process.env.npm_execpath,\n                    nodePath: process.env.NODE_PATH,\n                    userAgent: process.env.npm_config_user_agent,\n                };\n                console.error('[codex:nft-missing-file]', JSON.stringify(missingFileContext, null, 2));\n                if (realPath.includes('/.local/share/pnpm/.tools/pnpm/') || realPath.startsWith('/usr/bin') || realPath.startsWith('/proc/')) {\n                    console.error('[codex:nft-ignored-missing-file]', JSON.stringify(missingFileContext, null, 2));\n                    return;\n                }\n                throw new Error('File ' + realPath + ' does not exist.');\n            }`;
@@ -145,9 +157,11 @@ function logEnvironment() {
   log("npm_config_user_agent", process.env.npm_config_user_agent ?? "<unset>");
   log("NODE_PATH", process.env.NODE_PATH ?? "<unset>");
   log("PATH[pnpm]", (process.env.PATH ?? "").split(path.delimiter).filter((item) => item.includes("pnpm")).join(path.delimiter) || "<none>");
+  log("resolve adapter-vercel", adapterPackageJsonPath);
   log("resolve npm", safeResolve("npm"));
   log("resolve pnpm", safeResolve("pnpm"));
   log("resolve @vercel/nft", safeResolve("@vercel/nft/out/node-file-trace.js"));
+  log("resolve @vercel/nft via adapter", safeResolve("@vercel/nft/out/node-file-trace.js", adapterRequire));
   log("resolve node-gyp-build", safeResolve("node-gyp-build"));
   log("resolve @mapbox/node-pre-gyp", safeResolve("@mapbox/node-pre-gyp"));
 
@@ -235,8 +249,12 @@ async function runBuild() {
 }
 
 logEnvironment();
-const patchedPath = patchNftLogging();
-log("patched nft", patchedPath);
+try {
+  const patchedPath = patchNftLogging();
+  log("patched nft", patchedPath);
+} catch (error) {
+  log("patch nft skipped", error instanceof Error ? error.message : String(error));
+}
 
 if (dryRun) {
   log("mode", "dry-run");
